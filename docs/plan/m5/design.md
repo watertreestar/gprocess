@@ -29,12 +29,14 @@ IslandOverlay 渲染队列首条
 
 通知渠道设置不变：`notifyChannel: toast / island / both`，island 渠道从 `emitTo` 改为直接回调。
 
+> **后续变更**：Windows 系统 toast 渠道已整体移除（含 `notifyChannel` 设置、tauri-plugin-notification 前后端依赖与 capabilities 权限），告警仅保留主窗口灵动岛；`notificationsEnabled` 开关语义随之变为灵动岛总开关。窗口关闭（托盘常驻）期间不再有通知兜底。
+
 ## 3. 行为
 
 - **队列**：告警入队逐条展示，多条显示 `+N`
 - **自动收起**：30 秒无操作自动忽略当前条
 - **操作按钮**：查看（Eye）/ 结束（OctagonX，红色）/ 忽略（X），图标按钮单排排列
-- 主窗口关闭（托盘常驻）时灵动岛不可见——此时由系统 toast 兜底（默认 both 渠道）
+- 主窗口关闭（托盘常驻）时灵动岛不可见，此时无通知（系统 toast 渠道已移除）
 
 ## 4. 独立窗口方案的删除内容（过时实现，已移除）
 

@@ -6,7 +6,6 @@
   "permissions": [
     "core:default",
     "autostart:default",
-    "notification:default",
     "updater:default",
     "process:default"
   ]

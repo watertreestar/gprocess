@@ -21,7 +21,7 @@ import {
   type Settings,
 } from "@/lib/settings";
 import { useSnapshot } from "@/hooks/useSnapshot";
-import { ensureNotificationPermission, useWatchdog } from "@/hooks/useWatchdog";
+import { useWatchdog } from "@/hooks/useWatchdog";
 import { ProcessesPage } from "@/pages/ProcessesPage";
 import { HandlesPage } from "@/pages/HandlesPage";
 import { PortsPage } from "@/pages/PortsPage";
@@ -74,8 +74,7 @@ export default function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
 
-  // 看门狗：检测高占用 / 长时间孤儿，分发到系统通知与主窗口灵动岛
-  useEffect(() => ensureNotificationPermission(), []);
+  // 看门狗：检测高占用 / 长时间孤儿，推送到主窗口灵动岛
   const pushIslandAlert = useCallback(
     (alert: IslandAlert) => setIslandQueue((q) => [...q, alert]),
     [],
