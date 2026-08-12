@@ -1,0 +1,151 @@
+@import "tailwindcss";
+
+/* ============ 主题 token：prism-light（默认） ============ */
+:root {
+  --background: #f7f8fe;
+  --foreground: #202235;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --primary: #7650e7;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f3ff;
+  --secondary-foreground: #343752;
+  --muted: #f1f3ff;
+  --muted-foreground: #747a92;
+  --accent: #f3f0ff;
+  --accent-foreground: #512bb7;
+  --destructive: #e95462;
+  --border: #e8eaf4;
+  --input: #d9dcef;
+  --ring: #b7a6f6;
+  --success: #28bc88;
+  --warning: #f2a345;
+  --info: #468af7;
+  --chart-1: #7650e7;
+  --chart-2: #28bc88;
+  --chart-3: #468af7;
+  --chart-4: #f2a345;
+  --chart-5: #df6aa9;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #656a82;
+  --sidebar-primary: #7650e7;
+  --sidebar-accent: #f3f0ff;
+  --sidebar-accent-foreground: #512bb7;
+  --sidebar-border: #e8eaf4;
+  --sidebar-ring: #b7a6f6;
+  --surface-raised: rgba(255, 255, 255, 0.78);
+  --surface-overlay: rgba(255, 255, 255, 0.94);
+  --app-glow: rgba(118, 80, 231, 0.15);
+  --app-glow-secondary: rgba(70, 138, 247, 0.1);
+}
+
+/* ============ 主题 token：console-dark ============ */
+[data-theme="console-dark"] {
+  --background: #12131d;
+  --foreground: #f1f3f8;
+  --card: #171925;
+  --popover: #1d2030;
+  --primary: #8b6bff;
+  --primary-foreground: #ffffff;
+  --secondary: #242738;
+  --secondary-foreground: #eef0f6;
+  --muted: #202332;
+  --muted-foreground: #9ca3ba;
+  --accent: #2a2943;
+  --accent-foreground: #dcd4ff;
+  --destructive: #ff6672;
+  --border: #2c3043;
+  --input: #34394d;
+  --ring: #a992ff;
+  --success: #31d69b;
+  --warning: #f5a64a;
+  --info: #68a2ff;
+  --chart-1: #9d86ff;
+  --chart-2: #31d69b;
+  --chart-3: #68a2ff;
+  --chart-4: #f5a64a;
+  --chart-5: #ef77b4;
+  --sidebar: #141620;
+  --sidebar-foreground: #a9afc4;
+  --sidebar-primary: #9d86ff;
+  --sidebar-accent: #28283d;
+  --sidebar-accent-foreground: #dcd4ff;
+  --sidebar-border: #292d3e;
+  --sidebar-ring: #a992ff;
+  --surface-raised: rgba(28, 31, 45, 0.84);
+  --surface-overlay: rgba(28, 31, 45, 0.96);
+  --app-glow: rgba(125, 92, 250, 0.14);
+  --app-glow-secondary: rgba(49, 214, 155, 0.06);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-popover: var(--popover);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: "Geist Variable", "PingFang SC", "Microsoft YaHei", "Segoe UI",
+    sans-serif;
+  --font-mono: "Ubuntu Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+/* ============ tool-* 工作台原语 ============ */
+@layer components {
+  .tool-page {
+    @apply flex min-h-0 flex-1 flex-col overflow-hidden;
+  }
+  .tool-page-header {
+    @apply flex min-h-12 shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-2;
+  }
+  .tool-section {
+    @apply border-b border-border px-4 py-3;
+  }
+  .section-kicker {
+    @apply text-[10px] font-bold tracking-[0.07em] text-muted-foreground uppercase;
+  }
+  .tool-row {
+    @apply flex min-h-8 items-center gap-2 border-b border-border px-3 py-1.5 text-xs;
+  }
+  .tool-empty-state {
+    @apply flex min-h-60 flex-1 flex-col items-center justify-center gap-2.5 p-4 text-center;
+  }
+  .tool-sidebar {
+    @apply flex w-[300px] shrink-0 flex-col overflow-hidden border-l border-border bg-sidebar;
+  }
+  .status-dot {
+    @apply inline-block size-[7px] shrink-0 rounded-full;
+  }
+}
