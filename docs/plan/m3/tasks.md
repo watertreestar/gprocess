@@ -7,7 +7,7 @@
 
 ## 设置页
 
-- [x] 设置数据模型 + 持久化（localStorage，键 `gprocess.settings`；未引入 tauri store，满足当前需求的最简单实现）
+- [x] 设置数据模型 + 持久化（初版 localStorage；后迁移为 `%APPDATA%\com.gprocess.app\settings.json` 后端原子写）
 - [x] 设置页 UI：刷新间隔、孤儿阈值、默认过滤、主题切换、系统进程显隐
 - [x] 主题即时生效（`data-theme` 切换，prism-light / console-dark 两套 token）
 

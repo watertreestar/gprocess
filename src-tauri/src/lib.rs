@@ -2,6 +2,7 @@ mod admin;
 mod assess;
 mod island;
 mod kill;
+mod settings;
 mod snapshot;
 mod tray;
 
@@ -25,6 +26,8 @@ pub fn run() {
             assess::assess_process,
             admin::is_admin,
             admin::restart_as_admin,
+            settings::load_settings,
+            settings::save_settings,
         ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;

@@ -15,7 +15,12 @@ import {
   killTree,
   restartAsAdmin,
 } from "@/lib/api";
-import { loadSettings, saveSettings, type Settings } from "@/lib/settings";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from "@/lib/settings";
 import { useSnapshot } from "@/hooks/useSnapshot";
 import { ensureNotificationPermission, useWatchdog } from "@/hooks/useWatchdog";
 import { ProcessesPage } from "@/pages/ProcessesPage";
@@ -31,8 +36,6 @@ import type {
   ProcessInfo,
 } from "@/lib/types";
 
-const SIDEBAR_KEY = "gpie-navigation-expanded";
-
 interface KillTarget {
   process: ProcessInfo;
   mode: KillMode;
@@ -40,10 +43,8 @@ interface KillTarget {
 
 export default function App() {
   const [page, setPage] = useState<PageId>("processes");
-  const [expanded, setExpanded] = useState(
-    () => localStorage.getItem(SIDEBAR_KEY) === "1",
-  );
-  const [settings, setSettings] = useState<Settings>(loadSettings);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [isAdmin, setIsAdmin] = useState(true);
   const [selectedPid, setSelectedPid] = useState<number | null>(null);
   const [killTarget, setKillTarget] = useState<KillTarget | null>(null);
@@ -55,8 +56,18 @@ export default function App() {
     settings.orphanThresholdMin,
   );
 
-  // 设置持久化 + 主题应用（即时生效）
-  useEffect(() => saveSettings(settings), [settings]);
+  // 启动时从应用数据目录 settings.json 加载设置
+  useEffect(() => {
+    void loadSettings().then((s) => {
+      setSettings(s);
+      setSettingsLoaded(true);
+    });
+  }, []);
+
+  // 设置持久化（加载完成后才写，避免用默认值覆盖磁盘文件）+ 主题即时生效
+  useEffect(() => {
+    if (settingsLoaded) saveSettings(settings);
+  }, [settings, settingsLoaded]);
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
@@ -144,12 +155,8 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const toggleSidebar = () => {
-    setExpanded((v) => {
-      localStorage.setItem(SIDEBAR_KEY, v ? "0" : "1");
-      return !v;
-    });
-  };
+  const toggleSidebar = () =>
+    setSettings((s) => ({ ...s, sidebarExpanded: !s.sidebarExpanded }));
 
   const viewProcess = (pid: number) => {
     setSelectedPid(pid);
@@ -221,7 +228,7 @@ export default function App() {
         <Sidebar
           page={page}
           onNavigate={setPage}
-          expanded={expanded}
+          expanded={settings.sidebarExpanded}
           onToggle={toggleSidebar}
         />
         <div className="flex min-w-0 flex-1 flex-col">

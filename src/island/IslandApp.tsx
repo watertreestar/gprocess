@@ -3,6 +3,7 @@ import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Cpu, Eye, Ghost, OctagonX, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { loadSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import type { IslandAlert } from "@/lib/types";
 
@@ -22,17 +23,15 @@ export default function IslandApp() {
   const [expanded, setExpanded] = useState(false);
   const timerRef = useRef<number | undefined>(undefined);
 
-  // 透明背景 + 复用主面板主题 token
+  // 透明背景 + 复用主面板主题（从应用数据目录 settings.json 读取）
   useEffect(() => {
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
-    try {
-      const raw = localStorage.getItem("gprocess.settings");
-      const theme = raw ? (JSON.parse(raw) as { theme?: string }).theme : null;
-      document.documentElement.dataset.theme = theme ?? "prism-light";
-    } catch {
-      /* 读取失败用默认主题 */
-    }
+    void loadSettings()
+      .then((s) => {
+        document.documentElement.dataset.theme = s.theme;
+      })
+      .catch(() => {});
   }, []);
 
   const hideWindow = () => void getCurrentWindow().hide().catch(() => {});

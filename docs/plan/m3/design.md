@@ -7,9 +7,11 @@
 
 ## 设置持久化
 
-- 使用 Tauri 官方 store 插件（或等价本地 JSON 文件），键空间 `gprocess.settings`：
-  `refresh_interval_ms`、`orphan_min_age_minutes`、`default_filter`、`theme`、`show_system_processes`、`watched_ports[]`。
-- 设置变更实时生效：React context 广播，轮询 hook 与过滤逻辑订阅。
+- 最初用 localStorage 落地（最简单实现）；**M5 后已迁移为后端 JSON 文件**：
+  `%APPDATA%\com.gprocess.app\settings.json`，Rust `settings.rs` 原子写（临时文件 + rename），
+  前端 `loadSettings` 异步加载、加载完成前不落盘，侧栏展开状态也并入设置模型。
+- 键空间：`refreshIntervalMs`、`orphanThresholdMin`、`defaultFilter`、`theme`、`showSystemProcesses`、`watchedPorts[]`、`notificationsEnabled`、`notifyChannel`、`highCpuThreshold`、`longOrphanMin`、`sidebarExpanded`。
+- 设置变更实时生效：React state 广播，轮询 hook 与过滤逻辑订阅。
 
 ## 提权方案
 

@@ -1,3 +1,5 @@
+import { isTauri, loadSettingsFile, saveSettingsFile } from "@/lib/api";
+
 export type FilterTab = "all" | "orphan" | "listen" | "heavy";
 export type ThemeId = "prism-light" | "console-dark";
 /** 通知形式：系统通知 / 刘海屏 / 两者 */
@@ -21,9 +23,9 @@ export interface Settings {
   highCpuThreshold: number;
   /** 长时间孤儿通知阈值（分钟） */
   longOrphanMin: number;
+  /** 侧栏是否展开 */
+  sidebarExpanded: boolean;
 }
-
-const KEY = "gprocess.settings";
 
 export const DEFAULT_SETTINGS: Settings = {
   refreshIntervalMs: 2000,
@@ -36,11 +38,14 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyChannel: "both",
   highCpuThreshold: 90,
   longOrphanMin: 240,
+  sidebarExpanded: false,
 };
 
-export function loadSettings(): Settings {
+/** 从应用数据目录 settings.json 读取；文件缺失/损坏回退默认值 */
+export async function loadSettings(): Promise<Settings> {
+  if (!isTauri) return DEFAULT_SETTINGS;
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = await loadSettingsFile();
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw) as Partial<Settings>;
     return {
@@ -55,8 +60,10 @@ export function loadSettings(): Settings {
   }
 }
 
+/** 写入应用数据目录 settings.json（后端原子写） */
 export function saveSettings(settings: Settings) {
-  localStorage.setItem(KEY, JSON.stringify(settings));
+  if (!isTauri) return;
+  void saveSettingsFile(JSON.stringify(settings)).catch(() => {});
 }
 
 export const REFRESH_OPTIONS: { value: number; label: string }[] = [

@@ -47,6 +47,16 @@ export async function restartAsAdmin(): Promise<void> {
   return invoke("restart_as_admin");
 }
 
+/** 读取应用数据目录下的 settings.json；不存在返回 null */
+export async function loadSettingsFile(): Promise<string | null> {
+  return invoke<string | null>("load_settings");
+}
+
+/** 原子写入 settings.json */
+export async function saveSettingsFile(json: string): Promise<void> {
+  return invoke("save_settings", { json });
+}
+
 function normalizeKillError(e: unknown): KillError {
   if (e && typeof e === "object" && "kind" in e) {
     const err = e as { kind: string; message?: string };
