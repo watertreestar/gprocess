@@ -1,10 +1,14 @@
 export interface OrphanInfo {
-  /** none: 父存活或已豁免；expected: 系统启动器拉起的正常守护；confirmed: 疑似孤儿 */
+  /** none: 父存活或已豁免；expected: 正常守护；confirmed: 疑似孤儿 */
   status: "none" | "expected" | "confirmed";
   pidReused: boolean;
   heuristicScore: number;
   /** 最后观测到的父进程名（面板启动前已孤儿则为 null） */
   parentName: string | null;
+  /** expected 的来源分类 */
+  origin: "system" | "service" | "autostart" | "launcher" | null;
+  /** 非本机 ESTABLISHED 连接数（活跃度信号，降权不降级） */
+  externalConnections: number;
 }
 
 export interface ProcessInfo {
@@ -25,6 +29,8 @@ export interface PortBinding {
   protocol: "Tcp" | "Udp";
   localAddr: string;
   localPort: number;
+  /** 远端地址（仅 TCP；UDP 为 null） */
+  remoteAddr: string | null;
   state: string | null;
   pid: number;
 }

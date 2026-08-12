@@ -7,8 +7,8 @@ use sysinfo::ProcessesToUpdate;
 
 use crate::kill::KillError;
 use crate::snapshot::{
-    attach_orphan, collect_ports, collect_processes, now_millis, OrphanInfo, PortBinding,
-    ProcessInfo, SnapshotState,
+    attach_orphan, build_orphan_context, collect_ports, collect_processes, now_millis, OrphanInfo,
+    PortBinding, ProcessInfo, SnapshotState,
 };
 
 /// 安全级别，声明顺序即严重程度（Safe < Caution < Danger < Forbidden）
@@ -169,26 +169,15 @@ pub fn assess_process(
     };
 
     let ports = collect_ports();
-    let listen_pids: HashSet<u32> = ports
-        .iter()
-        .filter(|p| p.state.as_deref() == Some("Listen"))
-        .map(|p| p.pid)
-        .collect();
     let exclude_set: HashSet<String> = excludes
         .unwrap_or_default()
         .into_iter()
         .map(|s| s.to_lowercase())
         .collect();
+    let ctx = build_orphan_context(&state, &ports, now_ms, threshold_min);
     {
         let history = state.parent_history.lock().expect("history lock poisoned");
-        attach_orphan(
-            &mut processes,
-            &listen_pids,
-            now_ms,
-            threshold_min,
-            &history,
-            &exclude_set,
-        );
+        attach_orphan(&mut processes, &ctx, &history, &exclude_set);
     }
 
     let target = processes
@@ -252,6 +241,8 @@ mod tests {
                 pid_reused: false,
                 heuristic_score: 0,
                 parent_name: None,
+                origin: None,
+                external_connections: 0,
             },
         }
     }

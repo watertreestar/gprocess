@@ -16,6 +16,14 @@ import {
 
 const TREE_ROW_CAP = 50;
 
+/** expected 状态按来源分类的说明文案 */
+const ORIGIN_TEXT: Record<string, string> = {
+  system: "系统组件（位于 Windows 目录）",
+  service: "Windows 服务",
+  autostart: "开机启动项",
+  launcher: "由系统启动器拉起",
+};
+
 interface ProcessDetailProps {
   process: ProcessInfo | undefined;
   processes: ProcessInfo[];
@@ -256,11 +264,16 @@ export function ProcessDetail({
                   ? `父进程 ${process.orphan.parentName} 已退出，该进程在后台遗留运行。`
                   : "父进程已退出（身份未知：孤儿化发生在面板启动前）。"
               : isExpected
-                ? `由系统启动器 ${process.orphan.parentName ?? ""} 拉起，父进程退出属正常守护行为。`
+                ? `${ORIGIN_TEXT[process.orphan.origin ?? "launcher"]}，父进程退出属正常守护行为。`
                 : excluded
                   ? "在孤儿豁免名单中，不再判定为孤儿。"
                   : "父进程仍在运行，属于正常的父子关系。"}
           </p>
+          {isOrphan && process.orphan.externalConnections > 0 && (
+            <p className="mt-1 text-[10px] text-info">
+              仍有 {process.orphan.externalConnections} 条活跃外部连接，可能仍在被使用
+            </p>
+          )}
           {(isOrphan || excluded) && (
             <Button
               variant="ghost"

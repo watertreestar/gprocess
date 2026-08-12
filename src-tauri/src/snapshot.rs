@@ -7,10 +7,14 @@ use sysinfo::{ProcessesToUpdate, System, Users};
 
 /// 后端共享状态：复用 System 以保留 CPU 采样基线；Users 仅在启动时加载一次。
 /// parent_history 跨快照记录每个进程最后观测到的父进程名（父死后仍可用于孤儿判定）。
+/// 服务 PID / 启动项路径为 30s TTL 缓存，避免每次快照枚举 SCM 与注册表。
 pub struct SnapshotState {
     pub system: Mutex<System>,
     pub users: Users,
     pub parent_history: Mutex<HashMap<u32, ParentRef>>,
+    pub service_pids: Mutex<(std::time::Instant, HashSet<u32>)>,
+    pub autostart_paths: Mutex<(std::time::Instant, HashSet<String>)>,
+    pub windir: String,
 }
 
 /// 子进程 pid → 最后观测到的父进程名；child_start 用于 PID 复用防护
@@ -26,6 +30,15 @@ impl SnapshotState {
             system: Mutex::new(System::new()),
             users: Users::new_with_refreshed_list(),
             parent_history: Mutex::new(HashMap::new()),
+            service_pids: Mutex::new((
+                std::time::Instant::now() - std::time::Duration::from_secs(60),
+                HashSet::new(),
+            )),
+            autostart_paths: Mutex::new((
+                std::time::Instant::now() - std::time::Duration::from_secs(60),
+                HashSet::new(),
+            )),
+            windir: std::env::var("WINDIR").unwrap_or_else(|_| r"C:\Windows".into()),
         }
     }
 }
@@ -71,6 +84,23 @@ pub struct OrphanInfo {
     pub heuristic_score: u8,
     /// 最后观测到的父进程名（父存活时实时取，父死后取历史记录；面板启动前已孤儿则为 None）
     pub parent_name: Option<String>,
+    /// expected 的来源分类
+    pub origin: Option<ExpectedOrigin>,
+    /// 非本机 ESTABLISHED 连接数（仍被使用的活跃度信号，降权不降级）
+    pub external_connections: u32,
+}
+
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ExpectedOrigin {
+    /// exePath 在 %WINDIR% 下
+    System,
+    /// SCM 注册服务
+    Service,
+    /// Run 键开机启动项
+    Autostart,
+    /// 已知系统启动器拉起
+    Launcher,
 }
 
 #[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
@@ -88,6 +118,8 @@ pub struct PortBinding {
     pub protocol: Protocol,
     pub local_addr: String,
     pub local_port: u16,
+    /// 远端地址（仅 TCP；UDP 为 None）
+    pub remote_addr: Option<String>,
     pub state: Option<String>,
     pub pid: u32,
 }
@@ -178,16 +210,90 @@ pub fn detect_orphan(
     }
 }
 
-/// 为所有进程填充孤儿判定、父进程身份与展示优先级
-pub fn attach_orphan(
-    processes: &mut [ProcessInfo],
-    listen_pids: &HashSet<u32>,
+/// 孤儿判定的上下文数据（来源信号 + 活跃度 + 阈值）
+pub struct OrphanContext {
+    pub listen_pids: HashSet<u32>,
+    pub service_pids: HashSet<u32>,
+    pub autostart_paths: HashSet<String>,
+    /// pid → 非本机 ESTABLISHED 连接数
+    pub external_established: HashMap<u32, u32>,
+    pub now_ms: i64,
+    pub threshold_min: u32,
+    pub windir: String,
+}
+
+fn is_loopback_or_unspecified(addr: &str) -> bool {
+    addr.starts_with("127.")
+        || addr.starts_with("::1")
+        || addr.starts_with("0.0.0.0")
+        || addr.starts_with("::")
+        || addr.starts_with("[::1]")
+}
+
+/// 由端口数据 + 缓存的来源信号构建判定上下文（服务/启动项缓存 30s TTL）
+pub fn build_orphan_context(
+    state: &SnapshotState,
+    ports: &[PortBinding],
     now_ms: i64,
     threshold_min: u32,
+) -> OrphanContext {
+    const TTL: std::time::Duration = std::time::Duration::from_secs(30);
+
+    let service_pids = {
+        let mut cache = state.service_pids.lock().expect("service cache lock poisoned");
+        if cache.0.elapsed() > TTL {
+            cache.0 = std::time::Instant::now();
+            cache.1 = crate::origin::collect_service_pids();
+        }
+        cache.1.clone()
+    };
+    let autostart_paths = {
+        let mut cache = state
+            .autostart_paths
+            .lock()
+            .expect("autostart cache lock poisoned");
+        if cache.0.elapsed() > TTL {
+            cache.0 = std::time::Instant::now();
+            cache.1 = crate::origin::collect_autostart_paths();
+        }
+        cache.1.clone()
+    };
+
+    let mut listen_pids = HashSet::new();
+    let mut external_established: HashMap<u32, u32> = HashMap::new();
+    for port in ports {
+        if port.state.as_deref() == Some("Listen") {
+            listen_pids.insert(port.pid);
+        }
+        if port.state.as_deref() == Some("Established") {
+            if let Some(remote) = &port.remote_addr {
+                if !is_loopback_or_unspecified(remote) {
+                    *external_established.entry(port.pid).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+
+    OrphanContext {
+        listen_pids,
+        service_pids,
+        autostart_paths,
+        external_established,
+        now_ms,
+        threshold_min,
+        windir: state.windir.clone(),
+    }
+}
+
+/// 为所有进程填充孤儿判定、父进程身份与展示优先级。
+/// 判定优先级：豁免 > 系统路径 > SCM 服务 > 启动项 > 启动器 > confirmed
+pub fn attach_orphan(
+    processes: &mut [ProcessInfo],
+    ctx: &OrphanContext,
     parent_history: &HashMap<u32, ParentRef>,
     excludes: &HashSet<String>,
 ) {
-    let threshold_ms = threshold_min as i64 * 60_000;
+    let threshold_ms = ctx.threshold_min as i64 * 60_000;
     let start_by_pid: HashMap<u32, i64> =
         processes.iter().map(|p| (p.pid, p.start_time)).collect();
     let name_by_pid: HashMap<u32, String> =
@@ -203,25 +309,41 @@ pub fn attach_orphan(
                     .filter(|r| r.child_start == p.start_time)
                     .map(|r| r.parent_name.clone())
             });
+        let external_connections = ctx.external_established.get(&p.pid).copied().unwrap_or(0);
 
         let (mut status, pid_reused) = detect_orphan(p.pid, p.ppid, p.start_time, &start_by_pid);
+        let mut origin = None;
         let mut score = 0u8;
         if status == OrphanStatus::Confirmed {
-            // 已知系统启动器来源降级为正常守护
-            if parent_name
+            let exe_norm = p.exe_path.as_deref().map(crate::origin::normalize_path);
+            if crate::origin::is_system_path(p.exe_path.as_deref(), &ctx.windir) {
+                status = OrphanStatus::Expected;
+                origin = Some(ExpectedOrigin::System);
+            } else if ctx.service_pids.contains(&p.pid) {
+                status = OrphanStatus::Expected;
+                origin = Some(ExpectedOrigin::Service);
+            } else if exe_norm
+                .as_deref()
+                .map(|n| ctx.autostart_paths.contains(n))
+                .unwrap_or(false)
+            {
+                status = OrphanStatus::Expected;
+                origin = Some(ExpectedOrigin::Autostart);
+            } else if parent_name
                 .as_deref()
                 .map(|n| KNOWN_LAUNCHERS.contains(&n.to_lowercase().as_str()))
                 .unwrap_or(false)
             {
                 status = OrphanStatus::Expected;
+                origin = Some(ExpectedOrigin::Launcher);
             } else {
                 if RUNTIME_NAMES.contains(&p.name.to_lowercase().as_str()) {
                     score += 1;
                 }
-                if listen_pids.contains(&p.pid) {
+                if ctx.listen_pids.contains(&p.pid) {
                     score += 1;
                 }
-                if p.start_time > 0 && now_ms - p.start_time > threshold_ms {
+                if p.start_time > 0 && ctx.now_ms - p.start_time > threshold_ms {
                     score += 1;
                 }
             }
@@ -229,6 +351,7 @@ pub fn attach_orphan(
         // 用户豁免名单覆盖一切判定（exe 名小写精确匹配）
         if excludes.contains(&p.name.to_lowercase()) {
             status = OrphanStatus::None;
+            origin = None;
             score = 0;
         }
         p.orphan = OrphanInfo {
@@ -236,6 +359,8 @@ pub fn attach_orphan(
             pid_reused,
             heuristic_score: score,
             parent_name,
+            origin,
+            external_connections,
         };
     }
 }
@@ -268,6 +393,8 @@ pub fn collect_processes(sys: &System, users: &Users) -> Vec<ProcessInfo> {
                     pid_reused: false,
                     heuristic_score: 0,
                     parent_name: None,
+                    origin: None,
+                    external_connections: 0,
                 },
             }
         })
@@ -295,6 +422,7 @@ pub fn collect_ports() -> Vec<PortBinding> {
                 protocol: Protocol::Tcp,
                 local_addr,
                 local_port,
+                remote_addr: Some(tcp.remote_addr.to_string()),
                 state: Some(format!("{:?}", tcp.state)),
                 pid,
             }),
@@ -302,6 +430,7 @@ pub fn collect_ports() -> Vec<PortBinding> {
                 protocol: Protocol::Udp,
                 local_addr,
                 local_port,
+                remote_addr: None,
                 state: None,
                 pid,
             }),
@@ -329,27 +458,16 @@ pub fn snapshot(
     };
 
     let ports = collect_ports();
-    let listen_pids: HashSet<u32> = ports
-        .iter()
-        .filter(|p| p.state.as_deref() == Some("Listen"))
-        .map(|p| p.pid)
-        .collect();
     let exclude_set: HashSet<String> = excludes
         .unwrap_or_default()
         .into_iter()
         .map(|s| s.to_lowercase())
         .collect();
+    let ctx = build_orphan_context(&state, &ports, captured_at, threshold_min);
     {
         let mut history = state.parent_history.lock().expect("history lock poisoned");
         refresh_parent_history(&mut history, &processes);
-        attach_orphan(
-            &mut processes,
-            &listen_pids,
-            captured_at,
-            threshold_min,
-            &history,
-            &exclude_set,
-        );
+        attach_orphan(&mut processes, &ctx, &history, &exclude_set);
     }
 
     ProcessSnapshot {
@@ -441,6 +559,7 @@ mod tests {
                 protocol: Protocol::Tcp,
                 local_addr: "0.0.0.0".into(),
                 local_port: 8080,
+                remote_addr: None,
                 state: Some("Listen".into()),
                 pid: 1234,
             }],
@@ -468,14 +587,28 @@ mod tests {
                 pid_reused: false,
                 heuristic_score: 0,
                 parent_name: None,
+                origin: None,
+                external_connections: 0,
             },
         }
     }
 
+    fn empty_ctx() -> OrphanContext {
+        OrphanContext {
+            listen_pids: HashSet::new(),
+            service_pids: HashSet::new(),
+            autostart_paths: HashSet::new(),
+            external_established: HashMap::new(),
+            now_ms: 1_000_000,
+            threshold_min: 30,
+            windir: r"C:\Windows".into(),
+        }
+    }
+
     fn attach(procs: &mut [ProcessInfo], history: &HashMap<u32, ParentRef>, excludes: &[&str]) {
-        let listen = HashSet::new();
+        let ctx = empty_ctx();
         let exclude_set: HashSet<String> = excludes.iter().map(|s| s.to_lowercase()).collect();
-        attach_orphan(procs, &listen, 1_000_000, 30, history, &exclude_set);
+        attach_orphan(procs, &ctx, history, &exclude_set);
     }
 
     #[test]
@@ -571,5 +704,67 @@ mod tests {
         // 子退出：记录清除
         refresh_parent_history(&mut history, &[]);
         assert!(history.is_empty());
+    }
+
+    #[test]
+    fn system_path_downgrades_to_expected_system() {
+        let mut procs = vec![{
+            let mut p = fake_proc(200, Some(100), "RuntimeBroker.exe", 5000);
+            p.exe_path = Some(r"C:\Windows\System32\RuntimeBroker.exe".into());
+            p
+        }];
+        attach(&mut procs, &HashMap::new(), &[]);
+        assert_eq!(procs[0].orphan.status, OrphanStatus::Expected);
+        assert_eq!(procs[0].orphan.origin, Some(ExpectedOrigin::System));
+    }
+
+    #[test]
+    fn service_pid_downgrades_to_expected_service() {
+        let mut procs = vec![fake_proc(200, Some(100), "spoolsv.exe", 5000)];
+        let mut ctx = empty_ctx();
+        ctx.service_pids.insert(200);
+        attach_orphan(procs.as_mut_slice(), &ctx, &HashMap::new(), &HashSet::new());
+        assert_eq!(procs[0].orphan.status, OrphanStatus::Expected);
+        assert_eq!(procs[0].orphan.origin, Some(ExpectedOrigin::Service));
+    }
+
+    #[test]
+    fn autostart_path_downgrades_to_expected_autostart() {
+        let mut procs = vec![{
+            let mut p = fake_proc(200, Some(100), "OneDrive.exe", 5000);
+            p.exe_path = Some(r"C:\Users\dev\AppData\Local\Microsoft\OneDrive\OneDrive.exe".into());
+            p
+        }];
+        let mut ctx = empty_ctx();
+        ctx.autostart_paths.insert(
+            r"c:\users\dev\appdata\local\microsoft\onedrive\onedrive.exe".into(),
+        );
+        attach_orphan(procs.as_mut_slice(), &ctx, &HashMap::new(), &HashSet::new());
+        assert_eq!(procs[0].orphan.status, OrphanStatus::Expected);
+        assert_eq!(procs[0].orphan.origin, Some(ExpectedOrigin::Autostart));
+    }
+
+    #[test]
+    fn external_connections_counted_but_not_downgraded() {
+        // 活跃度降权不降级：有外部连接仍保持 confirmed
+        let mut procs = vec![fake_proc(200, Some(100), "node.exe", 5000)];
+        let mut ctx = empty_ctx();
+        ctx.external_established.insert(200, 3);
+        attach_orphan(procs.as_mut_slice(), &ctx, &HashMap::new(), &HashSet::new());
+        assert_eq!(procs[0].orphan.status, OrphanStatus::Confirmed);
+        assert_eq!(procs[0].orphan.external_connections, 3);
+    }
+
+    #[test]
+    fn origin_priority_excludes_first() {
+        // 豁免优先于一切来源信号
+        let mut procs = vec![{
+            let mut p = fake_proc(200, Some(100), "node.exe", 5000);
+            p.exe_path = Some(r"C:\Windows\System32\node.exe".into());
+            p
+        }];
+        attach(&mut procs, &HashMap::new(), &["node.exe"]);
+        assert_eq!(procs[0].orphan.status, OrphanStatus::None);
+        assert_eq!(procs[0].orphan.origin, None);
     }
 }

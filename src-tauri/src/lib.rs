@@ -1,6 +1,7 @@
 mod admin;
 mod assess;
 mod kill;
+mod origin;
 mod settings;
 mod snapshot;
 mod tray;

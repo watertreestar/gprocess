@@ -101,10 +101,13 @@ export function ProcessesPage({
     });
     const sorted = [...filtered];
     if (tab === "orphan") {
-      // 孤儿视图按展示优先级排序（runtime / 监听端口 / 长时间运行优先）
+      // 孤儿视图排序：特征分降序 → 来源未知靠后 → 仍有活跃外部连接靠后
       sorted.sort(
         (a, b) =>
           b.orphan.heuristicScore - a.orphan.heuristicScore ||
+          Number(b.orphan.parentName != null) -
+            Number(a.orphan.parentName != null) ||
+          a.orphan.externalConnections - b.orphan.externalConnections ||
           b.startTime - a.startTime,
       );
       return sorted;
@@ -305,7 +308,13 @@ export function ProcessesPage({
                       {p.pid}
                     </span>
                     <span className="truncate text-muted-foreground">
-                      {parent ? parent.name : p.ppid != null ? `#${p.ppid}` : "-"}
+                      {parent
+                        ? parent.name
+                        : p.orphan.parentName
+                          ? `${p.orphan.parentName}（已退出）`
+                          : p.ppid != null
+                            ? `#${p.ppid}`
+                            : "-"}
                     </span>
                     <span className="text-right font-mono text-muted-foreground">
                       {portCount > 0 ? portCount : ""}
