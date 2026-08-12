@@ -4,7 +4,6 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
-import { emitTo } from "@tauri-apps/api/event";
 import { isTauri } from "@/lib/api";
 import type { Settings } from "@/lib/settings";
 import type { IslandAlert, ProcessSnapshot } from "@/lib/types";
@@ -21,8 +20,12 @@ export function ensureNotificationPermission() {
     .catch(() => {});
 }
 
-/** 按通知渠道分发：toast → Windows 系统通知；island → 刘海屏窗口 */
-function dispatchAlert(settings: Settings, alert: IslandAlert) {
+/** 按通知渠道分发：toast → Windows 系统通知；island → 主窗口灵动岛 */
+function dispatchAlert(
+  settings: Settings,
+  alert: IslandAlert,
+  onIslandAlert: (a: IslandAlert) => void,
+) {
   const body =
     alert.kind === "highCpu"
       ? `${alert.name} (PID ${alert.pid}) CPU 持续 ${alert.value.toFixed(0)}%`
@@ -34,7 +37,7 @@ function dispatchAlert(settings: Settings, alert: IslandAlert) {
     sendNotification({ title, body });
   }
   if (settings.notifyChannel !== "toast") {
-    emitTo("island", "island:alert", alert).catch(() => {});
+    onIslandAlert(alert);
   }
 }
 
@@ -45,11 +48,15 @@ function dispatchAlert(settings: Settings, alert: IslandAlert) {
 export function useWatchdog(
   snapshot: ProcessSnapshot | null,
   settings: Settings,
+  onIslandAlert: (a: IslandAlert) => void,
 ) {
   // pid -> 上次达到 CPU 阈值的快照时间（用于"连续两次"判定）
   const lastCpuHit = useRef<Map<number, number>>(new Map());
   // pid -> 上次通知时间
   const notified = useRef<Map<number, number>>(new Map());
+  // 回调引用保持最新，避免纳入依赖导致重复判定
+  const onIslandAlertRef = useRef(onIslandAlert);
+  onIslandAlertRef.current = onIslandAlert;
 
   useEffect(() => {
     if (!snapshot || !isTauri || !settings.notificationsEnabled) return;
@@ -63,12 +70,16 @@ export function useWatchdog(
       if (p.cpuPercent >= settings.highCpuThreshold) {
         const prevHit = lastCpuHit.current.get(p.pid);
         if (prevHit != null && now - prevHit < 10_000) {
-          dispatchAlert(settings, {
-            kind: "highCpu",
-            pid: p.pid,
-            name: p.name,
-            value: p.cpuPercent,
-          });
+          dispatchAlert(
+            settings,
+            {
+              kind: "highCpu",
+              pid: p.pid,
+              name: p.name,
+              value: p.cpuPercent,
+            },
+            onIslandAlertRef.current,
+          );
           notified.current.set(p.pid, now);
           continue;
         }
@@ -83,12 +94,16 @@ export function useWatchdog(
         p.startTime > 0 &&
         now - p.startTime > settings.longOrphanMin * 60_000
       ) {
-        dispatchAlert(settings, {
-          kind: "longOrphan",
-          pid: p.pid,
-          name: p.name,
-          value: (now - p.startTime) / 60_000,
-        });
+        dispatchAlert(
+          settings,
+          {
+            kind: "longOrphan",
+            pid: p.pid,
+            name: p.name,
+            value: (now - p.startTime) / 60_000,
+          },
+          onIslandAlertRef.current,
+        );
         notified.current.set(p.pid, now);
       }
     }

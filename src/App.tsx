@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { IslandOverlay } from "@/components/IslandOverlay";
 import { KillDialog } from "@/components/KillDialog";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts, type ToastItem } from "@/components/Toasts";
@@ -27,7 +26,7 @@ import { ProcessesPage } from "@/pages/ProcessesPage";
 import { PortsPage } from "@/pages/PortsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import type {
-  IslandAction,
+  IslandAlert,
   KillAssessment,
   KillError,
   KillMode,
@@ -50,6 +49,7 @@ export default function App() {
   const [killTarget, setKillTarget] = useState<KillTarget | null>(null);
   const [assessment, setAssessment] = useState<KillAssessment | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const [islandQueue, setIslandQueue] = useState<IslandAlert[]>([]);
 
   const { snapshot, refresh, refreshing } = useSnapshot(
     settings.refreshIntervalMs,
@@ -73,28 +73,30 @@ export default function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
 
-  // 系统通知：启动时申请权限，看门狗检测高占用 / 长时间孤儿
+  // 看门狗：检测高占用 / 长时间孤儿，分发到系统通知与主窗口灵动岛
   useEffect(() => ensureNotificationPermission(), []);
-  useWatchdog(snapshot, settings);
+  const pushIslandAlert = useCallback(
+    (alert: IslandAlert) => setIslandQueue((q) => [...q, alert]),
+    [],
+  );
+  useWatchdog(snapshot, settings, pushIslandAlert);
 
-  // 刘海屏联动：查看/结束 → 唤起主面板；结束走确认 Dialog（不破安全模型）
+  // 灵动岛联动：查看 → 选中进程；结束 → 弹确认 Dialog（不破安全模型）
   const byPidRef = useRef<Map<number, ProcessInfo>>(new Map());
-  useEffect(() => {
-    if (!isTauri) return;
-    const unlisten = listen<IslandAction>("island:action", (e) => {
-      const { action, pid } = e.payload;
-      const win = getCurrentWindow();
-      void win.show().then(() => win.unminimize()).then(() => win.setFocus());
-      setPage("processes");
-      setSelectedPid(pid);
-      if (action === "kill") {
-        const proc = byPidRef.current.get(pid);
-        if (proc) setKillTarget({ process: proc, mode: "single" });
-      }
-    });
-    return () => {
-      void unlisten.then((f) => f());
-    };
+  const islandView = useCallback((pid: number) => {
+    setPage("processes");
+    setSelectedPid(pid);
+    setIslandQueue([]);
+  }, []);
+  const islandKill = useCallback((pid: number) => {
+    setPage("processes");
+    setSelectedPid(pid);
+    const proc = byPidRef.current.get(pid);
+    if (proc) setKillTarget({ process: proc, mode: "single" });
+    setIslandQueue([]);
+  }, []);
+  const islandDismiss = useCallback(() => {
+    setIslandQueue((q) => q.slice(1));
   }, []);
 
   const patchSettings = useCallback(
@@ -240,7 +242,13 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen min-w-[1180px] overflow-hidden bg-background text-foreground">
+      <div className="relative flex h-screen min-w-[1180px] overflow-hidden bg-background text-foreground">
+        <IslandOverlay
+          queue={islandQueue}
+          onView={islandView}
+          onKill={islandKill}
+          onDismiss={islandDismiss}
+        />
         <Sidebar
           page={page}
           onNavigate={setPage}

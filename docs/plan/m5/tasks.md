@@ -1,31 +1,29 @@
 # M5 任务清单
 
-## 后端（Rust）
+> 迭代 1（独立窗口）已完成并交付；迭代 2 按用户反馈改为主窗口内悬浮胶囊，迭代 1 实现整体删除（见 design.md 修订记录）。
 
-- [x] setup 中创建 `island` 窗口：透明 / 无边框 / 置顶 / skipTaskbar / 主屏顶部居中 / 初始隐藏
-- [x] island 窗口 CloseRequested → hide（不退出应用）
-- [x] capabilities 覆盖 island 窗口并补 window / event 权限
+## 迭代 2：主窗口内灵动岛（当前实现）
 
-## 前端：窗口路由与 Island UI
+### 清理（删除迭代 1）
 
-- [x] `main.tsx` 按 `#/island` hash 分流渲染 `<IslandApp />`（复用同一 bundle，不加 vite 多页）
-- [x] `IslandApp`：监听 `island:alert` 事件入队，卡片渲染（进程名 / PID / 指标 / 排队计数）
-- [x] 卡片动画：窗口内胶囊 → 卡片展开（CSS transition，固定窗口尺寸不变）
-- [x] 交互：「查看」「结束」「忽略」；30 秒无操作自动 hide；点击后出队显示下一条
+- [x] 删除 `island.rs` / `IslandApp.tsx` / main.tsx hash 分流 / 窗口间事件 / `IslandAction` 类型
+- [x] capabilities 回退为仅 main 窗口 + 插件权限
 
-## 前端：watchdog 渠道分发
+### 前端
 
-- [x] settings 增加 `notifyChannel: "toast" | "island" | "both"`（默认 `both`）
-- [x] `useWatchdog` 按 channel 分发：toast → `sendNotification`；island → `emitTo("island", "island:alert", payload)`
-- [x] 设置页「通知」区块增加形式选择（Select）
+- [x] `IslandOverlay` 组件：主窗口顶部居中黑色胶囊（macOS 风格，不随主题变色），单排 34px
+- [x] 胶囊 → 展开动画（210px → 400px，CSS transition），操作区淡入
+- [x] 队列 + `+N` 计数；30 秒无操作自动忽略；查看/结束/忽略三键
+- [x] `useWatchdog` island 渠道从 `emitTo` 改为 App 回调（islandQueue state）
+- [x] 查看 → 选中进程；结束 → KillDialog 确认（不破安全模型）
 
-## 前端：主面板联动
+### 质量门禁
 
-- [x] App 监听 `island:action`：`view` → 显示主窗口 + 切进程页 + 选中 pid；`kill` → 同上并打开 KillDialog
-- [ ] island 窗口弹出时主窗口隐藏（托盘常驻）场景验证 —— 待人工验收
-
-## 质量门禁
-
-- [x] `cargo test`（19 通过）/ `cargo clippy -D warnings` / `npm run build` 全绿
+- [x] `cargo test`（27 通过）/ `cargo clippy -D warnings` / `npm run build` 全绿
 - [ ] release 构建完成；人工验收（README 1–6）待用户确认
-- [x] 更新 `docs/plans.md`（M5 勾选）
+
+## 迭代 1：独立 island 窗口（已删除，仅留档）
+
+- [x] setup 创建透明无边框置顶 island 窗口 + CloseRequested 拦截
+- [x] `#/island` hash 分流渲染；`island:alert` / `island:action` 窗口间事件
+- [x] watchdog 渠道分发与设置页形式选择（设置项沿用至迭代 2）
