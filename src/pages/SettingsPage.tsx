@@ -28,9 +28,11 @@ import {
 import { isTauri } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
+  NOTIFY_CHANNEL_OPTIONS,
   REFRESH_OPTIONS,
   THEME_OPTIONS,
   type FilterTab,
+  type NotifyChannel,
   type Settings,
   type ThemeId,
 } from "@/lib/settings";
@@ -276,12 +278,29 @@ export function SettingsPage({
           <div className="section-kicker mb-1">通知</div>
           <Row
             label="系统通知"
-            hint="超高资源占用与长时间孤儿进程触发 Windows 通知"
+            hint="超高资源占用与长时间孤儿进程触发告警"
           >
             <Toggle
               checked={settings.notificationsEnabled}
               onChange={(v) => onChange({ notificationsEnabled: v })}
             />
+          </Row>
+          <Row label="通知形式" hint="刘海屏在屏幕顶部中央弹出，可直接查看/结束">
+            <Select
+              value={settings.notifyChannel}
+              onValueChange={(v) => onChange({ notifyChannel: v as NotifyChannel })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {NOTIFY_CHANNEL_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Row>
           <Row
             label="高 CPU 阈值（%）"

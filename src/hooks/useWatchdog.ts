@@ -4,9 +4,10 @@ import {
   requestPermission,
   sendNotification,
 } from "@tauri-apps/plugin-notification";
+import { emitTo } from "@tauri-apps/api/event";
 import { isTauri } from "@/lib/api";
 import type { Settings } from "@/lib/settings";
-import type { ProcessSnapshot } from "@/lib/types";
+import type { IslandAlert, ProcessSnapshot } from "@/lib/types";
 
 const COOLDOWN_MS = 10 * 60_000; // 同一进程 10 分钟内不重复通知
 
@@ -20,8 +21,21 @@ export function ensureNotificationPermission() {
     .catch(() => {});
 }
 
-function notify(title: string, body: string) {
-  sendNotification({ title, body });
+/** 按通知渠道分发：toast → Windows 系统通知；island → 刘海屏窗口 */
+function dispatchAlert(settings: Settings, alert: IslandAlert) {
+  const body =
+    alert.kind === "highCpu"
+      ? `${alert.name} (PID ${alert.pid}) CPU 持续 ${alert.value.toFixed(0)}%`
+      : `${alert.name} (PID ${alert.pid}) 父进程已退出，仍在后台运行`;
+  const title =
+    alert.kind === "highCpu" ? "gprocess：超高资源占用" : "gprocess：长时间孤儿进程";
+
+  if (settings.notifyChannel !== "island") {
+    sendNotification({ title, body });
+  }
+  if (settings.notifyChannel !== "toast") {
+    emitTo("island", "island:alert", alert).catch(() => {});
+  }
 }
 
 /**
@@ -49,10 +63,12 @@ export function useWatchdog(
       if (p.cpuPercent >= settings.highCpuThreshold) {
         const prevHit = lastCpuHit.current.get(p.pid);
         if (prevHit != null && now - prevHit < 10_000) {
-          notify(
-            "gprocess：超高资源占用",
-            `${p.name} (PID ${p.pid}) CPU 持续 ${p.cpuPercent.toFixed(0)}%`,
-          );
+          dispatchAlert(settings, {
+            kind: "highCpu",
+            pid: p.pid,
+            name: p.name,
+            value: p.cpuPercent,
+          });
           notified.current.set(p.pid, now);
           continue;
         }
@@ -67,16 +83,19 @@ export function useWatchdog(
         p.startTime > 0 &&
         now - p.startTime > settings.longOrphanMin * 60_000
       ) {
-        notify(
-          "gprocess：长时间孤儿进程",
-          `${p.name} (PID ${p.pid}) 父进程已退出，仍在后台运行`,
-        );
+        dispatchAlert(settings, {
+          kind: "longOrphan",
+          pid: p.pid,
+          name: p.name,
+          value: (now - p.startTime) / 60_000,
+        });
         notified.current.set(p.pid, now);
       }
     }
   }, [
     snapshot,
     settings.notificationsEnabled,
+    settings.notifyChannel,
     settings.highCpuThreshold,
     settings.longOrphanMin,
   ]);

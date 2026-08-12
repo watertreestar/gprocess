@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { KillDialog } from "@/components/KillDialog";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts, type ToastItem } from "@/components/Toasts";
@@ -20,6 +22,7 @@ import { ProcessesPage } from "@/pages/ProcessesPage";
 import { PortsPage } from "@/pages/PortsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import type {
+  IslandAction,
   KillAssessment,
   KillError,
   KillMode,
@@ -62,6 +65,26 @@ export default function App() {
   useEffect(() => ensureNotificationPermission(), []);
   useWatchdog(snapshot, settings);
 
+  // 刘海屏联动：查看/结束 → 唤起主面板；结束走确认 Dialog（不破安全模型）
+  const byPidRef = useRef<Map<number, ProcessInfo>>(new Map());
+  useEffect(() => {
+    if (!isTauri) return;
+    const unlisten = listen<IslandAction>("island:action", (e) => {
+      const { action, pid } = e.payload;
+      const win = getCurrentWindow();
+      void win.show().then(() => win.unminimize()).then(() => win.setFocus());
+      setPage("processes");
+      setSelectedPid(pid);
+      if (action === "kill") {
+        const proc = byPidRef.current.get(pid);
+        if (proc) setKillTarget({ process: proc, mode: "single" });
+      }
+    });
+    return () => {
+      void unlisten.then((f) => f());
+    };
+  }, []);
+
   const patchSettings = useCallback(
     (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })),
     [],
@@ -78,6 +101,7 @@ export default function App() {
     snapshot?.processes.forEach((p) => map.set(p.pid, p));
     return map;
   }, [snapshot]);
+  byPidRef.current = byPid;
 
   const portsByPid = useMemo(() => {
     const map = new Map<number, PortBinding[]>();

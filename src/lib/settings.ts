@@ -1,5 +1,7 @@
 export type FilterTab = "all" | "orphan" | "listen" | "heavy";
 export type ThemeId = "prism-light" | "console-dark";
+/** 通知形式：系统通知 / 刘海屏 / 两者 */
+export type NotifyChannel = "toast" | "island" | "both";
 
 export interface Settings {
   /** 自动刷新间隔（毫秒），0 表示手动 */
@@ -13,6 +15,8 @@ export interface Settings {
   watchedPorts: number[];
   /** 系统通知总开关 */
   notificationsEnabled: boolean;
+  /** 通知形式 */
+  notifyChannel: NotifyChannel;
   /** 高 CPU 通知阈值（%） */
   highCpuThreshold: number;
   /** 长时间孤儿通知阈值（分钟） */
@@ -29,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showSystemProcesses: true,
   watchedPorts: [],
   notificationsEnabled: true,
+  notifyChannel: "both",
   highCpuThreshold: 90,
   longOrphanMin: 240,
 };
@@ -64,4 +69,10 @@ export const REFRESH_OPTIONS: { value: number; label: string }[] = [
 export const THEME_OPTIONS: { value: ThemeId; label: string }[] = [
   { value: "prism-light", label: "棱镜浅色" },
   { value: "console-dark", label: "控制台深色" },
+];
+
+export const NOTIFY_CHANNEL_OPTIONS: { value: NotifyChannel; label: string }[] = [
+  { value: "both", label: "系统通知 + 刘海屏" },
+  { value: "toast", label: "仅系统通知" },
+  { value: "island", label: "仅刘海屏" },
 ];

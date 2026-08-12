@@ -63,6 +63,21 @@ export type SortKey = "startTime" | "cpu" | "memory";
 
 export type KillMode = "single" | "tree";
 
+/** 刘海屏告警负载（main → island，事件 island:alert） */
+export interface IslandAlert {
+  kind: "highCpu" | "longOrphan";
+  pid: number;
+  name: string;
+  /** highCpu: 当前 CPU%；longOrphan: 已运行分钟数 */
+  value: number;
+}
+
+/** 刘海屏操作（island → main，事件 island:action） */
+export interface IslandAction {
+  action: "view" | "kill";
+  pid: number;
+}
+
 export const LEVEL_META: Record<
   AssessLevel,
   { label: string; badge: "success" | "info" | "warning" | "destructive" }

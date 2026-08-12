@@ -1,5 +1,6 @@
 mod admin;
 mod assess;
+mod island;
 mod kill;
 mod snapshot;
 mod tray;
@@ -27,6 +28,7 @@ pub fn run() {
         ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;
+            island::setup_island(app.handle())?;
             Ok(())
         })
         .run(tauri::generate_context!())
