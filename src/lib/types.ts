@@ -66,11 +66,23 @@ export interface KillError {
   message?: string;
 }
 
-export type PageId = "processes" | "ports" | "settings";
+export type PageId = "processes" | "ports" | "handles" | "settings";
 
 export type SortKey = "startTime" | "cpu" | "memory";
 
 export type KillMode = "single" | "tree";
+
+/** 文件句柄占用者（Restart Manager 查询结果） */
+export interface HandleLocker {
+  pid: number;
+  appName: string;
+  exePath: string | null;
+  user: string | null;
+  /** sysinfo 进程状态；进程已退出则为「已退出」 */
+  status: string;
+  isService: boolean;
+  restartable: boolean;
+}
 
 /** 灵动岛告警负载（主窗口内通知队列） */
 export interface IslandAlert {

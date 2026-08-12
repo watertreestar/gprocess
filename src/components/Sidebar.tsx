@@ -1,4 +1,4 @@
-import { Activity, ChevronsLeft, ChevronsRight, Network, Settings } from "lucide-react";
+import { Activity, ChevronsLeft, ChevronsRight, FileSearch, Network, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { PageId } from "@/lib/types";
@@ -6,6 +6,7 @@ import type { PageId } from "@/lib/types";
 const NAV_ITEMS: { id: PageId; label: string; icon: typeof Activity }[] = [
   { id: "processes", label: "进程", icon: Activity },
   { id: "ports", label: "端口", icon: Network },
+  { id: "handles", label: "句柄", icon: FileSearch },
   { id: "settings", label: "设置", icon: Settings },
 ];
 

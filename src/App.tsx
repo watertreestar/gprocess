@@ -23,6 +23,7 @@ import {
 import { useSnapshot } from "@/hooks/useSnapshot";
 import { ensureNotificationPermission, useWatchdog } from "@/hooks/useWatchdog";
 import { ProcessesPage } from "@/pages/ProcessesPage";
+import { HandlesPage } from "@/pages/HandlesPage";
 import { PortsPage } from "@/pages/PortsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import type {
@@ -232,7 +233,13 @@ export default function App() {
   const listenCount = snapshot?.ports.filter((p) => p.state === "Listen").length ?? 0;
 
   const pageTitle =
-    page === "processes" ? "进程" : page === "ports" ? "端口" : "设置";
+    page === "processes"
+      ? "进程"
+      : page === "ports"
+        ? "端口"
+        : page === "handles"
+          ? "句柄"
+          : "设置";
   const pageSummary =
     page === "processes" && snapshot
       ? `共 ${snapshot.processes.length} 个进程，疑似孤儿 ${orphanCount} 个`
@@ -259,7 +266,11 @@ export default function App() {
           <TopBar
             title={pageTitle}
             summary={pageSummary}
-            capturedAt={page === "settings" ? undefined : snapshot?.capturedAt}
+            capturedAt={
+              page === "settings" || page === "handles"
+                ? undefined
+                : snapshot?.capturedAt
+            }
             refreshing={refreshing}
             refreshIntervalMs={settings.refreshIntervalMs}
             isAdmin={isAdmin}
@@ -287,6 +298,12 @@ export default function App() {
                 onViewProcess={viewProcess}
                 onKill={(process) => setKillTarget({ process, mode: "single" })}
                 onToggleWatch={toggleWatchPort}
+              />
+            ) : page === "handles" ? (
+              <HandlesPage
+                byPid={byPid}
+                onViewProcess={viewProcess}
+                onKill={(process) => setKillTarget({ process, mode: "single" })}
               />
             ) : (
               <SettingsPage

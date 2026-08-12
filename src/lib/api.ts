@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  HandleLocker,
   KillAssessment,
   KillError,
   KillTreeResult,
@@ -43,6 +44,11 @@ export async function killTree(pid: number): Promise<KillTreeResult> {
 
 export async function isAdmin(): Promise<boolean> {
   return invoke<boolean>("is_admin");
+}
+
+/** 查询持有指定文件句柄的进程（Restart Manager） */
+export async function findFileLockers(path: string): Promise<HandleLocker[]> {
+  return invoke<HandleLocker[]>("find_file_lockers", { path });
 }
 
 export async function restartAsAdmin(): Promise<void> {

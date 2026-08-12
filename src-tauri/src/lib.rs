@@ -1,5 +1,6 @@
 mod admin;
 mod assess;
+mod handles;
 mod kill;
 mod origin;
 mod settings;
@@ -24,6 +25,7 @@ pub fn run() {
             kill::kill_process,
             kill::kill_tree,
             assess::assess_process,
+            handles::find_file_lockers,
             admin::is_admin,
             admin::restart_as_admin,
             settings::load_settings,
