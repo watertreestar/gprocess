@@ -7,18 +7,24 @@ import type { ProcessSnapshot } from "@/lib/types";
  * - intervalMs 为 0 时仅手动刷新
  * - 页面不可见时暂停，恢复可见时立即补一次
  */
-export function useSnapshot(intervalMs: number, orphanThresholdMin: number) {
+export function useSnapshot(
+  intervalMs: number,
+  orphanThresholdMin: number,
+  orphanExcludes: string[],
+) {
   const [snapshot, setSnapshot] = useState<ProcessSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const inFlight = useRef(false);
+  // 豁免名单内容变化才触发重取（避免数组引用抖动）
+  const excludesKey = orphanExcludes.join(",");
 
   const refresh = useCallback(async () => {
     if (!isTauri || inFlight.current) return;
     inFlight.current = true;
     setRefreshing(true);
     try {
-      setSnapshot(await fetchSnapshot(orphanThresholdMin));
+      setSnapshot(await fetchSnapshot(orphanThresholdMin, orphanExcludes));
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -26,7 +32,8 @@ export function useSnapshot(intervalMs: number, orphanThresholdMin: number) {
       inFlight.current = false;
       setRefreshing(false);
     }
-  }, [orphanThresholdMin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orphanThresholdMin, excludesKey]);
 
   useEffect(() => {
     if (!isTauri) return;

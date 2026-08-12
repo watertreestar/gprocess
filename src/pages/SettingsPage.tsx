@@ -110,6 +110,15 @@ export function SettingsPage({
   onToast,
 }: SettingsPageProps) {
   const [portInput, setPortInput] = useState("");
+  const [excludeInput, setExcludeInput] = useState("");
+
+  const addExclude = () => {
+    const name = excludeInput.trim().toLowerCase();
+    if (name && !settings.orphanExcludes.includes(name)) {
+      onChange({ orphanExcludes: [...settings.orphanExcludes, name].sort() });
+    }
+    setExcludeInput("");
+  };
 
   // 开机自启：插件注册表状态为准，不存进 settings 模型
   const [autostartOn, setAutostartOn] = useState<boolean | null>(null);
@@ -361,6 +370,46 @@ export function SettingsPage({
               }}
             />
           </Row>
+          <div className="py-2">
+            <div className="text-xs font-medium">豁免名单</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">
+              有意开启的后台进程，按 exe 名匹配（如 node.exe），命中不再判定为孤儿
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Input
+              className="w-40 font-mono"
+              placeholder="如 node.exe"
+              value={excludeInput}
+              onChange={(e) => setExcludeInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addExclude()}
+            />
+            <Button variant="secondary" size="sm" onClick={addExclude}>
+              <Plus />
+              添加
+            </Button>
+          </div>
+          {settings.orphanExcludes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pb-2">
+              {settings.orphanExcludes.map((name) => (
+                <Badge key={name} variant="info" className="gap-1 font-mono">
+                  {name}
+                  <button
+                    className="cursor-pointer opacity-70 hover:opacity-100"
+                    onClick={() =>
+                      onChange({
+                        orphanExcludes: settings.orphanExcludes.filter(
+                          (n) => n !== name,
+                        ),
+                      })
+                    }
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* 关注端口 */}

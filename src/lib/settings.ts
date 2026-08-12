@@ -23,6 +23,8 @@ export interface Settings {
   highCpuThreshold: number;
   /** 长时间孤儿通知阈值（分钟） */
   longOrphanMin: number;
+  /** 孤儿豁免名单（exe 名小写精确匹配，命中不再判定为孤儿） */
+  orphanExcludes: string[];
   /** 侧栏是否展开 */
   sidebarExpanded: boolean;
 }
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   notifyChannel: "both",
   highCpuThreshold: 90,
   longOrphanMin: 240,
+  orphanExcludes: [],
   sidebarExpanded: false,
 };
 
@@ -53,6 +56,11 @@ export async function loadSettings(): Promise<Settings> {
       ...parsed,
       watchedPorts: Array.isArray(parsed.watchedPorts)
         ? parsed.watchedPorts.filter((p) => Number.isInteger(p) && p > 0 && p <= 65535)
+        : [],
+      orphanExcludes: Array.isArray(parsed.orphanExcludes)
+        ? parsed.orphanExcludes
+            .filter((s): s is string => typeof s === "string" && s.length > 0)
+            .map((s) => s.toLowerCase())
         : [],
     };
   } catch {

@@ -42,6 +42,7 @@ interface ProcessesPageProps {
   onSelect: (pid: number | null) => void;
   onKill: (process: ProcessInfo, mode: KillMode) => void;
   onGotoPorts: () => void;
+  onToggleExclude: (name: string) => void;
 }
 
 export function ProcessesPage({
@@ -54,6 +55,7 @@ export function ProcessesPage({
   onSelect,
   onKill,
   onGotoPorts,
+  onToggleExclude,
 }: ProcessesPageProps) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("startTime");
@@ -350,10 +352,12 @@ export function ProcessesPage({
         ports={selectedPid != null ? (portsByPid.get(selectedPid) ?? []) : []}
         now={now}
         thresholdMin={settings.orphanThresholdMin}
+        orphanExcludes={settings.orphanExcludes}
         onSelect={onSelect}
         onClose={() => onSelect(null)}
         onKill={onKill}
         onGotoPorts={onGotoPorts}
+        onToggleExclude={onToggleExclude}
       />
     </div>
   );

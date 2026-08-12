@@ -54,6 +54,7 @@ export default function App() {
   const { snapshot, refresh, refreshing } = useSnapshot(
     settings.refreshIntervalMs,
     settings.orphanThresholdMin,
+    settings.orphanExcludes,
   );
 
   // 启动时从应用数据目录 settings.json 加载设置
@@ -137,7 +138,11 @@ export default function App() {
     setAssessment(null);
     if (!killTarget || !isTauri) return;
     let cancelled = false;
-    assessProcess(killTarget.process.pid, settings.orphanThresholdMin)
+    assessProcess(
+      killTarget.process.pid,
+      settings.orphanThresholdMin,
+      settings.orphanExcludes,
+    )
       .then((a) => !cancelled && setAssessment(a))
       .catch(() => {
         /* 进程已退出时评估失败，Dialog 按未知级别展示 */
@@ -145,7 +150,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [killTarget, settings.orphanThresholdMin]);
+  }, [killTarget, settings.orphanThresholdMin, settings.orphanExcludes]);
 
   const pushToast = useCallback((kind: ToastItem["kind"], message: string) => {
     setToasts((prev) => [...prev, { id: Date.now() + Math.random(), kind, message }]);
@@ -169,6 +174,17 @@ export default function App() {
       watchedPorts: s.watchedPorts.includes(port)
         ? s.watchedPorts.filter((p) => p !== port)
         : [...s.watchedPorts, port].sort((a, b) => a - b),
+    }));
+  };
+
+  // 孤儿豁免：exe 名小写入库，命中后不再判定为孤儿
+  const toggleOrphanExclude = (name: string) => {
+    const key = name.toLowerCase();
+    setSettings((s) => ({
+      ...s,
+      orphanExcludes: s.orphanExcludes.includes(key)
+        ? s.orphanExcludes.filter((n) => n !== key)
+        : [...s.orphanExcludes, key].sort(),
     }));
   };
 
@@ -253,6 +269,7 @@ export default function App() {
                 onSelect={setSelectedPid}
                 onKill={(process, mode) => setKillTarget({ process, mode })}
                 onGotoPorts={() => setPage("ports")}
+                onToggleExclude={toggleOrphanExclude}
               />
             ) : page === "ports" ? (
               <PortsPage

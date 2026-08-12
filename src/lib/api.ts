@@ -12,15 +12,17 @@ export const isTauri =
 
 export async function fetchSnapshot(
   thresholdMin?: number,
+  excludes?: string[],
 ): Promise<ProcessSnapshot> {
-  return invoke<ProcessSnapshot>("snapshot", { thresholdMin });
+  return invoke<ProcessSnapshot>("snapshot", { thresholdMin, excludes });
 }
 
 export async function assessProcess(
   pid: number,
   thresholdMin?: number,
+  excludes?: string[],
 ): Promise<KillAssessment> {
-  return invoke<KillAssessment>("assess_process", { pid, thresholdMin });
+  return invoke<KillAssessment>("assess_process", { pid, thresholdMin, excludes });
 }
 
 export async function killProcess(pid: number): Promise<void> {

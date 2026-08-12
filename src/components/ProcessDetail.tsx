@@ -23,10 +23,12 @@ interface ProcessDetailProps {
   ports: PortBinding[];
   now: number;
   thresholdMin: number;
+  orphanExcludes: string[];
   onSelect: (pid: number | null) => void;
   onClose: () => void;
   onKill: (process: ProcessInfo, mode: KillMode) => void;
   onGotoPorts: () => void;
+  onToggleExclude: (name: string) => void;
 }
 
 export function ProcessDetail({
@@ -36,10 +38,12 @@ export function ProcessDetail({
   ports,
   now,
   thresholdMin,
+  orphanExcludes,
   onSelect,
   onClose,
   onKill,
   onGotoPorts,
+  onToggleExclude,
 }: ProcessDetailProps) {
   const [copied, setCopied] = useState(false);
   const [assessment, setAssessment] = useState<KillAssessment | null>(null);
@@ -51,13 +55,13 @@ export function ProcessDetail({
     setAssessError(false);
     if (pid == null || !isTauri) return;
     let cancelled = false;
-    assessProcess(pid, thresholdMin)
+    assessProcess(pid, thresholdMin, orphanExcludes)
       .then((a) => !cancelled && setAssessment(a))
       .catch(() => !cancelled && setAssessError(true));
     return () => {
       cancelled = true;
     };
-  }, [pid, thresholdMin]);
+  }, [pid, thresholdMin, orphanExcludes]);
 
   // 资源历史：每个选中进程保留近 30 个采样点（≈60s），切换进程不清空
   const historyRef = useRef<Map<number, { cpu: number[]; mem: number[] }>>(
@@ -132,6 +136,8 @@ export function ProcessDetail({
 
   const cmd = cmdlineText(process.cmdline);
   const isOrphan = process.orphan.status === "confirmed";
+  const isExpected = process.orphan.status === "expected";
+  const excluded = orphanExcludes.includes(process.name.toLowerCase());
   const forbidden = assessment?.level === "forbidden";
 
   const copyCmd = async () => {
@@ -229,6 +235,10 @@ export function ProcessDetail({
           <div className="flex items-center gap-2">
             {isOrphan ? (
               <Badge variant="warning">疑似孤儿</Badge>
+            ) : isExpected ? (
+              <Badge variant="secondary">正常守护</Badge>
+            ) : excluded ? (
+              <Badge variant="info">已豁免</Badge>
             ) : (
               <Badge variant="success">父进程存活</Badge>
             )}
@@ -242,9 +252,25 @@ export function ProcessDetail({
             {isOrphan
               ? process.orphan.pidReused
                 ? "父 PID 已被新进程复用，真正的父进程已退出。"
-                : "父进程已退出，该进程在后台遗留运行。"
-              : "父进程仍在运行，属于正常的父子关系。"}
+                : process.orphan.parentName
+                  ? `父进程 ${process.orphan.parentName} 已退出，该进程在后台遗留运行。`
+                  : "父进程已退出（身份未知：孤儿化发生在面板启动前）。"
+              : isExpected
+                ? `由系统启动器 ${process.orphan.parentName ?? ""} 拉起，父进程退出属正常守护行为。`
+                : excluded
+                  ? "在孤儿豁免名单中，不再判定为孤儿。"
+                  : "父进程仍在运行，属于正常的父子关系。"}
           </p>
+          {(isOrphan || excluded) && (
+            <Button
+              variant="ghost"
+              size="xs"
+              className="mt-1.5"
+              onClick={() => onToggleExclude(process.name)}
+            >
+              {excluded ? "取消豁免" : "标记为有意后台进程（豁免）"}
+            </Button>
+          )}
         </div>
 
         {/* 进程树 */}

@@ -157,6 +157,7 @@ pub fn assess_process(
     state: tauri::State<SnapshotState>,
     pid: u32,
     threshold_min: Option<u32>,
+    excludes: Option<Vec<String>>,
 ) -> Result<KillAssessment, KillError> {
     let now_ms = now_millis();
     let threshold_min = threshold_min.unwrap_or(30);
@@ -173,7 +174,22 @@ pub fn assess_process(
         .filter(|p| p.state.as_deref() == Some("Listen"))
         .map(|p| p.pid)
         .collect();
-    attach_orphan(&mut processes, &listen_pids, now_ms, threshold_min);
+    let exclude_set: HashSet<String> = excludes
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| s.to_lowercase())
+        .collect();
+    {
+        let history = state.parent_history.lock().expect("history lock poisoned");
+        attach_orphan(
+            &mut processes,
+            &listen_pids,
+            now_ms,
+            threshold_min,
+            &history,
+            &exclude_set,
+        );
+    }
 
     let target = processes
         .iter()
@@ -235,6 +251,7 @@ mod tests {
                 status: OrphanStatus::None,
                 pid_reused: false,
                 heuristic_score: 0,
+                parent_name: None,
             },
         }
     }

@@ -1,7 +1,10 @@
 export interface OrphanInfo {
-  status: "none" | "confirmed";
+  /** none: 父存活或已豁免；expected: 系统启动器拉起的正常守护；confirmed: 疑似孤儿 */
+  status: "none" | "expected" | "confirmed";
   pidReused: boolean;
   heuristicScore: number;
+  /** 最后观测到的父进程名（面板启动前已孤儿则为 null） */
+  parentName: string | null;
 }
 
 export interface ProcessInfo {
