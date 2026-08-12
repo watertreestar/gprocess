@@ -11,6 +11,12 @@ export interface Settings {
   theme: ThemeId;
   showSystemProcesses: boolean;
   watchedPorts: number[];
+  /** 系统通知总开关 */
+  notificationsEnabled: boolean;
+  /** 高 CPU 通知阈值（%） */
+  highCpuThreshold: number;
+  /** 长时间孤儿通知阈值（分钟） */
+  longOrphanMin: number;
 }
 
 const KEY = "gprocess.settings";
@@ -22,6 +28,9 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "prism-light",
   showSystemProcesses: true,
   watchedPorts: [],
+  notificationsEnabled: true,
+  highCpuThreshold: 90,
+  longOrphanMin: 240,
 };
 
 export function loadSettings(): Settings {

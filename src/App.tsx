@@ -15,6 +15,7 @@ import {
 } from "@/lib/api";
 import { loadSettings, saveSettings, type Settings } from "@/lib/settings";
 import { useSnapshot } from "@/hooks/useSnapshot";
+import { ensureNotificationPermission, useWatchdog } from "@/hooks/useWatchdog";
 import { ProcessesPage } from "@/pages/ProcessesPage";
 import { PortsPage } from "@/pages/PortsPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -56,6 +57,10 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
+
+  // 系统通知：启动时申请权限，看门狗检测高占用 / 长时间孤儿
+  useEffect(() => ensureNotificationPermission(), []);
+  useWatchdog(snapshot, settings);
 
   const patchSettings = useCallback(
     (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch })),
@@ -233,6 +238,7 @@ export default function App() {
                 onChange={patchSettings}
                 isAdmin={isAdmin}
                 onRestartAsAdmin={handleRestartAsAdmin}
+                onToast={pushToast}
               />
             )}
           </main>

@@ -24,6 +24,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": ["icons/icon.png", "icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCQzlCNjIxNzZFMDZFRjUKUldUMWJ1QjJJYmJKMnhiUUs5WDhGNEZDVHZtUEhJclFCWWQxbnkzTkVkN3M2dDBMQ2N2aUo3WnoK",
+      "endpoints": [
+        "https://github.com/yaping/gprocess/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

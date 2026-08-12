@@ -69,7 +69,59 @@ npm run tauri build -- --bundles nsis,msi
 - `src-tauri/target/release/bundle/nsis/gprocess_<ver>_x64-setup.exe`（当前用户安装，免管理员，推荐个人使用）
 - `src-tauri/target/release/bundle/msi/gprocess_<ver>_x64_en-US.msi`（标准 MSI，适合企业分发）
 
-## 5. 已知坑（踩过）
+## 5. 自动更新发版（GitHub Releases）
+
+应用内「设置 → 更新 → 检查更新」依赖 updater 插件，endpoint 已配置为
+`https://github.com/yaping/gprocess/releases/latest/download/latest.json`（仓库建立后生效）。
+
+### 5.1 签名密钥（一次性，已生成）
+
+- 私钥：`C:\Users\yaping\.tauri\gprocess.key`（**不入库、不外泄**）
+- 公钥：已写入 `src-tauri/tauri.conf.json` → `plugins.updater.pubkey`
+- 私钥无密码；若更换密钥必须同步更新 pubkey 并让所有用户重装
+
+### 5.2 发布一个新版本
+
+```bash
+# 1. 改版本号（tauri.conf.json + Cargo.toml 两处）
+
+# 2. 设置签名环境变量后打包（updater 产物自动签名）
+export TAURI_SIGNING_PRIVATE_KEY_PATH="$USERPROFILE/.tauri/gprocess.key"
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""        # 空密码也要显式设置
+npm run tauri build -- --bundles nsis,msi
+```
+
+签名产物（`createUpdaterArtifacts: true` 已开启）：
+
+- `bundle/nsis/gprocess_<ver>_x64-setup.exe` + `.sig`
+- updater 实际下载的是 `bundle/nsis/gprocess_<ver>_x64-setup.nsis.zip` + `.sig`（构建目录下自动生成）
+
+### 5.3 在 GitHub 创建 Release
+
+1. 推送代码并打 tag（如 `v0.2.0`），创建对应 Release
+2. 上传产物：`.nsis.zip`、`.nsis.zip.sig`、`*-setup.exe`、`.msi`
+3. 在 Release 中放置 `latest.json`（作为 Release asset）：
+
+```json
+{
+  "version": "0.2.0",
+  "notes": "更新说明",
+  "pub_date": "2026-08-12T00:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "<.nsis.zip.sig 文件的完整文本内容>",
+      "url": "https://github.com/yaping/gprocess/releases/download/v0.2.0/gprocess_0.2.0_x64-setup.nsis.zip"
+    }
+  }
+}
+```
+
+### 5.4 验证
+
+旧版本应用 → 设置 → 检查更新 → 应提示新版本 → 下载并安装 → 自动重启为新版本。
+注意：GitHub 直连受限时 updater 下载可能失败，属于网络问题而非配置问题。
+
+## 6. 已知坑（踩过）
 
 1. **bundle.icon 必须包含 `.ico`**：MSI 打包强制要求，缺则报 `Couldn't find a .ico icon`
 2. **工具链目录校验失败会被清空重建**：手动部署 NSIS/WiX 后若仍报 missing，对照上文必需文件清单逐个检查（常见于插件 dll 缺失或多套了一层目录）

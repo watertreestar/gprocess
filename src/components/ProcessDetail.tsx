@@ -1,5 +1,5 @@
 import { Check, Copy, MousePointerClick, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { assessProcess, isTauri } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -58,6 +58,21 @@ export function ProcessDetail({
       cancelled = true;
     };
   }, [pid, thresholdMin]);
+
+  // 资源历史：每个选中进程保留近 30 个采样点（≈60s），切换进程不清空
+  const historyRef = useRef<Map<number, { cpu: number[]; mem: number[] }>>(
+    new Map(),
+  );
+  useEffect(() => {
+    if (!process) return;
+    const map = historyRef.current;
+    if (map.size > 500) map.clear();
+    const entry = map.get(process.pid) ?? { cpu: [], mem: [] };
+    entry.cpu = [...entry.cpu.slice(-29), process.cpuPercent];
+    entry.mem = [...entry.mem.slice(-29), process.memoryBytes];
+    map.set(process.pid, entry);
+    // 依赖 process 对象引用：每次快照更新都会追加一个采样点
+  }, [process]);
 
   // 父链（向上最多 3 层，环保护）
   const ancestors = useMemo(() => {
@@ -188,6 +203,25 @@ export function ProcessDetail({
             </dd>
           </dl>
         </div>
+
+        {/* 资源曲线（近 60 秒） */}
+        {(() => {
+          const history = historyRef.current.get(process.pid);
+          if (!history || history.cpu.length < 2) return null;
+          return (
+            <div className="tool-section">
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="section-kicker">资源曲线（近 60 秒）</span>
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  <span className="text-chart-1">CPU {process.cpuPercent.toFixed(0)}%</span>
+                  {" · "}
+                  <span className="text-chart-2">{formatBytes(process.memoryBytes)}</span>
+                </span>
+              </div>
+              <Sparkline cpu={history.cpu} mem={history.mem} />
+            </div>
+          );
+        })()}
 
         {/* 孤儿判定 */}
         <div className="tool-section">
@@ -354,5 +388,54 @@ export function ProcessDetail({
         </Tooltip>
       </div>
     </aside>
+  );
+}
+
+/** 资源曲线：CPU / 内存双折线，样本不足时右对齐（最新点在右侧） */
+function Sparkline({ cpu, mem }: { cpu: number[]; mem: number[] }) {
+  const W = 268;
+  const H = 44;
+  const N = 30;
+
+  const toPoints = (values: number[], normalize: (v: number) => number) => {
+    // 右对齐：不足 N 个点时左侧留白
+    const offset = N - values.length;
+    return values
+      .map((v, i) => {
+        const x = ((offset + i) / (N - 1)) * W;
+        const y = H - 2 - normalize(v) * (H - 6);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+  };
+
+  const memMax = Math.max(...mem, 1);
+  const cpuPoints = toPoints(cpu, (v) => Math.min(v / 100, 1));
+  const memPoints = toPoints(mem, (v) => v / memMax);
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="h-11 w-full"
+      role="img"
+      aria-label="CPU 与内存近 60 秒曲线"
+    >
+      <polyline
+        points={cpuPoints}
+        fill="none"
+        stroke="var(--chart-1)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      <polyline
+        points={memPoints}
+        fill="none"
+        stroke="var(--chart-2)"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
