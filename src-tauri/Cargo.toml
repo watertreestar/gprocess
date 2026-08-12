@@ -11,6 +11,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+# 生产构建（含运行时创建的窗口正确解析 prod URL）必须启用：
+#   cargo build --release --features custom-protocol
+# `npm run tauri build` 会自动带上该 feature
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
 [dependencies]
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"

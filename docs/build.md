@@ -60,7 +60,12 @@ npm run build          # 前端类型检查 + 产物（tsc --noEmit && vite buil
 # 2. 关闭正在运行的 gprocess.exe（否则 exe 被占用链接失败）
 taskkill //IM gprocess.exe //F
 
-# 3. 打包（nsis / msi 可单选）
+# 3. 只出可执行文件（不打安装包）时，必须带 custom-protocol feature：
+#    运行时创建的窗口（如 island）靠它把 URL 解析为内嵌资源而非 devUrl，
+#    缺了会在窗口里报 ERR_CONNECTION_REFUSED
+cargo build --release --features custom-protocol
+
+# 4. 打包安装包（nsis / msi 可单选；tauri CLI 会自动带 custom-protocol）
 npm run tauri build -- --bundles nsis,msi
 ```
 
@@ -127,3 +132,4 @@ npm run tauri build -- --bundles nsis,msi
 2. **工具链目录校验失败会被清空重建**：手动部署 NSIS/WiX 后若仍报 missing，对照上文必需文件清单逐个检查（常见于插件 dll 缺失或多套了一层目录）
 3. **debug 版 exe 不能直接运行**：debug 构建走 devUrl（需要 vite dev server）；独立运行请用 release 构建 `src-tauri/target/release/gprocess.exe`
 4. **`cargo build` 与 `tauri build` 都会嵌入 `dist/`**：发版前确保 `npm run build` 产物是最新的（`tauri build` 会自动执行 `beforeBuildCommand`）
+5. **运行时创建的窗口报 ERR_CONNECTION_REFUSED**：`tauri::is_dev()` 由 `custom-protocol` feature 决定（`!cfg!(feature = "custom-protocol")`），与 cargo profile 无关。配置里声明的窗口走编译期内嵌资源所以没事，但 `WebviewWindowBuilder` 运行时创建的窗口（M5 island）会被解析到 devUrl `http://localhost:1420`。修复：Cargo.toml 加转发 feature `custom-protocol = ["tauri/custom-protocol"]`，手动构建用 `cargo build --release --features custom-protocol`；`npm run tauri build` 自带无需处理
