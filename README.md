@@ -91,4 +91,4 @@ docs/                   Product, architecture, milestone, and build docs
 
 ## License
 
-This is a private project. No permission is granted to copy, modify, or distribute the source code unless explicitly authorized by the owner.
+No license is currently granted. Unless explicitly authorized by the owner, the source code may not be copied, modified, or distributed.
