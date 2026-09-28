@@ -1,11 +1,42 @@
-# 前端
+# Dependencies
 node_modules/
+
+# Frontend build output
 dist/
 
-# Rust / Tauri
+# Rust / Tauri build output
 src-tauri/target/
 src-tauri/gen/
 
-# 系统
+# Environment and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs and test output
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+
+# Signing keys and certificates
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Operating system files
 .DS_Store
 Thumbs.db
+Desktop.ini

@@ -77,7 +77,7 @@ npm run tauri build -- --bundles nsis,msi
 ## 5. 自动更新发版（GitHub Releases）
 
 应用内「设置 → 更新 → 检查更新」依赖 updater 插件，endpoint 已配置为
-`https://github.com/yaping/gprocess/releases/latest/download/latest.json`（仓库建立后生效）。
+`https://github.com/watertreestar/gprocess/releases/latest/download/latest.json`。Tauri updater 默认以匿名请求下载资源；当前仓库为私有仓库，正式启用自动更新前需将仓库设为公开并发布 Release，或改用支持鉴权的发布源。
 
 ### 5.1 签名密钥（一次性，已生成）
 
@@ -115,7 +115,7 @@ npm run tauri build -- --bundles nsis,msi
   "platforms": {
     "windows-x86_64": {
       "signature": "<.nsis.zip.sig 文件的完整文本内容>",
-      "url": "https://github.com/yaping/gprocess/releases/download/v0.2.0/gprocess_0.2.0_x64-setup.nsis.zip"
+      "url": "https://github.com/watertreestar/gprocess/releases/download/v0.2.0/gprocess_0.2.0_x64-setup.nsis.zip"
     }
   }
 }
