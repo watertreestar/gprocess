@@ -2,9 +2,38 @@
 
 简体中文 | [English](README.md)
 
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D4?logo=windows11&logoColor=white" alt="Windows 10/11">
+  <img src="https://img.shields.io/badge/version-0.1.0-7C3AED" alt="版本 0.1.0">
+  <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=0B1522" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.8">
+  <img src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white" alt="Rust stable">
+  <img src="https://img.shields.io/github/last-commit/watertreestar/gprocess?logo=github&color=7C3AED" alt="最近提交">
+</p>
+
 一款面向开发机的轻量级 Windows 进程与端口管理桌面应用。gprocess 用于发现被遗忘的进程、被占用的端口和被锁定的文件，评估结束进程的风险，并安全地完成清理。
 
 项目基于 Tauri 2、React 19、TypeScript 和 Rust 构建。
+
+<p align="center">
+  <img src="docs/assets/screenshots/processes.png" alt="gprocess 进程总览" width="100%">
+</p>
+
+## 界面预览
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/screenshots/ports.png" alt="端口占用检查"><br>
+      <sub>查看 TCP/UDP 绑定与监听端口</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/screenshots/settings.png" alt="应用设置"><br>
+      <sub>配置监控、告警、开机自启和外观</sub>
+    </td>
+  </tr>
+</table>
 
 ## 功能特性
 

@@ -2,9 +2,38 @@
 
 [简体中文](README.zh-CN.md) | English
 
+<p align="center">
+  <img src="https://img.shields.io/badge/platform-Windows_10%2F11-0078D4?logo=windows11&logoColor=white" alt="Windows 10/11">
+  <img src="https://img.shields.io/badge/version-0.1.0-7C3AED" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white" alt="Tauri 2">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=0B1522" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript&logoColor=white" alt="TypeScript 5.8">
+  <img src="https://img.shields.io/badge/Rust-stable-000000?logo=rust&logoColor=white" alt="Rust stable">
+  <img src="https://img.shields.io/github/last-commit/watertreestar/gprocess?logo=github&color=7C3AED" alt="Last commit">
+</p>
+
 A lightweight Windows process and port management desktop application built for developer workstations. gprocess helps you find forgotten processes, occupied ports, and locked files, assess termination risks, and clean them up safely.
 
 Built with Tauri 2, React 19, TypeScript, and Rust.
+
+<p align="center">
+  <img src="docs/assets/screenshots/processes.png" alt="gprocess process overview" width="100%">
+</p>
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/screenshots/ports.png" alt="Port inspection"><br>
+      <sub>Inspect TCP/UDP bindings and listening ports</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/screenshots/settings.png" alt="Application settings"><br>
+      <sub>Configure monitoring, alerts, startup, and appearance</sub>
+    </td>
+  </tr>
+</table>
 
 ## Features
 
