@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { assessProcess, isTauri } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { FeedbackDialog } from "@/components/FeedbackDialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cmdlineText, formatBytes, formatDuration, formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,8 @@ export function ProcessDetail({
   const [copied, setCopied] = useState(false);
   const [assessment, setAssessment] = useState<KillAssessment | null>(null);
   const [assessError, setAssessError] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackTotal, setFeedbackTotal] = useState<number | null>(null);
 
   const pid = process?.pid;
   useEffect(() => {
@@ -215,6 +218,12 @@ export function ProcessDetail({
             <dd className="truncate font-mono text-muted-foreground">
               {process.exePath ?? "-"}
             </dd>
+            {process.script && (
+              <>
+                <dt className="text-muted-foreground">启动脚本</dt>
+                <dd className="truncate font-mono">{process.script}</dd>
+              </>
+            )}
           </dl>
         </div>
 
@@ -261,7 +270,11 @@ export function ProcessDetail({
               ? process.orphan.pidReused
                 ? "父 PID 已被新进程复用，真正的父进程已退出。"
                 : process.orphan.parentName
-                  ? `父进程 ${process.orphan.parentName} 已退出，该进程在后台遗留运行。`
+                  ? `父进程 ${process.orphan.parentName}${
+                      process.orphan.parentScript
+                        ? `（${process.orphan.parentScript}）`
+                        : ""
+                    } 已退出，该进程在后台遗留运行。`
                   : "父进程已退出（身份未知：孤儿化发生在面板启动前）。"
               : isExpected
                 ? `${ORIGIN_TEXT[process.orphan.origin ?? "launcher"]}，父进程退出属正常守护行为。`
@@ -283,6 +296,19 @@ export function ProcessDetail({
             >
               {excluded ? "取消豁免" : "标记为有意后台进程（豁免）"}
             </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="xs"
+            className="mt-1.5"
+            onClick={() => setFeedbackOpen(true)}
+          >
+            判定有误？
+          </Button>
+          {feedbackTotal != null && (
+            <p className="mt-1 text-[10px] text-success">
+              已记录第 {feedbackTotal} 条样本，感谢反馈
+            </p>
           )}
         </div>
 
@@ -426,6 +452,14 @@ export function ProcessDetail({
           )}
         </Tooltip>
       </div>
+
+      <FeedbackDialog
+        process={process}
+        open={feedbackOpen}
+        thresholdMin={thresholdMin}
+        onOpenChange={setFeedbackOpen}
+        onRecorded={setFeedbackTotal}
+      />
     </aside>
   );
 }

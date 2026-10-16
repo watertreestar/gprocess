@@ -1,5 +1,6 @@
 mod admin;
 mod assess;
+mod feedback;
 mod handles;
 mod kill;
 mod origin;
@@ -29,6 +30,7 @@ pub fn run() {
             admin::restart_as_admin,
             settings::load_settings,
             settings::save_settings,
+            feedback::record_feedback,
         ])
         .setup(|app| {
             tray::setup_tray(app.handle())?;

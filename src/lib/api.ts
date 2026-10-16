@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  FeedbackLabel,
   HandleLocker,
   KillAssessment,
   KillError,
@@ -63,6 +64,16 @@ export async function loadSettingsFile(): Promise<string | null> {
 /** 原子写入 settings.json */
 export async function saveSettingsFile(json: string): Promise<void> {
   return invoke("save_settings", { json });
+}
+
+/** 记录一条判定反馈样本（落盘 JSONL），返回累计样本数 */
+export async function recordFeedback(
+  pid: number,
+  label: FeedbackLabel,
+  note?: string,
+  thresholdMin?: number,
+): Promise<number> {
+  return invoke<number>("record_feedback", { pid, label, note, thresholdMin });
 }
 
 function normalizeKillError(e: unknown): KillError {
