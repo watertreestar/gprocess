@@ -30,7 +30,7 @@ M4 已接入 updater 插件（`tauri_plugin_updater` 在 `lib.rs` 初始化，pu
 
 - **开发环境**：非 Tauri（浏览器）直接跳过；`tauri dev` 下 endpoint 无 release 时 check 抛错 → 启动检查静默、手动检查 toast
 - **下载进度**：contentLength 缺失时进度条显示不确定态
-- **签名缺失**：`createUpdaterArtifacts` 需要 `TAURI_SIGNING_PRIVATE_KEY`；未配置时构建不生成 latest.json/.sig，端到端验证受限（发布侧问题，非本里程碑代码缺陷）
+- **签名缺失**：`createUpdaterArtifacts` 需要 `TAURI_SIGNING_PRIVATE_KEY`；未配置时不生成 `.sig`，且发布 workflow 无法构建更新资产；`latest.json` 由 tauri-action 在发布时生成。
 
 ## 发布注意事项（供后续 release 流程）
 
@@ -39,4 +39,4 @@ M4 已接入 updater 插件（`tauri_plugin_updater` 在 `lib.rs` 初始化，pu
 3. 构建时设置环境变量（实机验证通过的方式）：
    - `TAURI_SIGNING_PRIVATE_KEY`：密钥文件**内容**（`$(cat <key>)`，传文件路径不生效）
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：无密码密钥必须显式设为空字符串，否则签名步骤阻塞等待密码输入
-4. 产物：安装包 + 同名 `.sig`；`latest.json` 需在发布时手工生成（含 version/notes/pub_date/platforms[windows-x86_64].signature/.url，signature 为 .sig 文件内容 base64），与安装包、.sig 一起上传到 GitHub Release 资产
+4. 本地构建产物为安装包和同名 `.sig`；`.github/workflows/release.yml` 在推送与应用版本一致的 `v*` 标签后使用 `tauri-apps/tauri-action` 构建、上传资产并生成 `latest.json`。发布前需配置仓库级 `TAURI_SIGNING_PRIVATE_KEY` Secret。
