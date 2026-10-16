@@ -135,7 +135,11 @@ fn enrich(state: &SnapshotState, lockers: &mut [HandleLocker]) {
     }
     let pids: Vec<Pid> = lockers.iter().map(|l| Pid::from_u32(l.pid)).collect();
     let mut sys = state.system.lock().expect("system lock poisoned");
-    sys.refresh_processes(ProcessesToUpdate::Some(&pids), true);
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&pids),
+        true,
+        crate::snapshot::process_refresh_kind(),
+    );
     for l in lockers.iter_mut() {
         match sys.process(Pid::from_u32(l.pid)) {
             Some(p) => {

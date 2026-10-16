@@ -277,6 +277,11 @@ export function ProcessesPage({
                     />
                     <span className="flex min-w-0 items-center gap-1.5">
                       <span className="truncate font-medium">{p.name}</span>
+                      {p.script && (
+                        <span className="truncate font-mono text-[10px] text-muted-foreground">
+                          {p.script}
+                        </span>
+                      )}
                       {isOrphan && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -311,7 +316,11 @@ export function ProcessesPage({
                       {parent
                         ? parent.name
                         : p.orphan.parentName
-                          ? `${p.orphan.parentName}（已退出）`
+                          ? `${p.orphan.parentName}${
+                              p.orphan.parentScript
+                                ? `（${p.orphan.parentScript}）`
+                                : ""
+                            }（已退出）`
                           : p.ppid != null
                             ? `#${p.ppid}`
                             : "-"}

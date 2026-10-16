@@ -7,8 +7,8 @@ use sysinfo::ProcessesToUpdate;
 
 use crate::kill::KillError;
 use crate::snapshot::{
-    attach_orphan, build_orphan_context, collect_ports, collect_processes, now_millis, OrphanInfo,
-    PortBinding, ProcessInfo, SnapshotState,
+    attach_orphan, build_orphan_context, collect_ports, collect_processes, now_millis,
+    process_refresh_kind, OrphanInfo, PortBinding, ProcessInfo, SnapshotState,
 };
 
 /// 安全级别，声明顺序即严重程度（Safe < Caution < Danger < Forbidden）
@@ -164,7 +164,7 @@ pub fn assess_process(
 
     let mut processes = {
         let mut sys = state.system.lock().expect("system lock poisoned");
-        sys.refresh_processes(ProcessesToUpdate::All, true);
+        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, process_refresh_kind());
         collect_processes(&sys, &state.users)
     };
 
@@ -231,6 +231,7 @@ mod tests {
             name: name.into(),
             exe_path: None,
             cmdline: vec![],
+            script: None,
             start_time: 1_000_000,
             cpu_percent: 0.0,
             memory_bytes: 0,
@@ -241,6 +242,7 @@ mod tests {
                 pid_reused: false,
                 heuristic_score: 0,
                 parent_name: None,
+                parent_script: None,
                 origin: None,
                 external_connections: 0,
             },

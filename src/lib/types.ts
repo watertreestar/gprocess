@@ -5,6 +5,8 @@ export interface OrphanInfo {
   heuristicScore: number;
   /** 最后观测到的父进程名（面板启动前已孤儿则为 null） */
   parentName: string | null;
+  /** 父进程为 runtime（node/python 等）时的脚本标记，如 "agent-browser" */
+  parentScript: string | null;
   /** expected 的来源分类 */
   origin: "system" | "service" | "autostart" | "launcher" | null;
   /** 非本机 ESTABLISHED 连接数（活跃度信号，降权不降级） */
@@ -17,6 +19,8 @@ export interface ProcessInfo {
   name: string;
   exePath: string | null;
   cmdline: string[];
+  /** runtime 进程（node/python 等）从 cmdline 提取的脚本标记，如 "vite"/"npm"/"agent-browser" */
+  script: string | null;
   startTime: number;
   cpuPercent: number;
   memoryBytes: number;
@@ -71,6 +75,9 @@ export type PageId = "processes" | "ports" | "handles" | "settings";
 export type SortKey = "startTime" | "cpu" | "memory";
 
 export type KillMode = "single" | "tree";
+
+/** 判定反馈标签：误报 / 来源分类错误 / 漏判 */
+export type FeedbackLabel = "not_orphan" | "origin_wrong" | "is_orphan";
 
 /** 文件句柄占用者（Restart Manager 查询结果） */
 export interface HandleLocker {
