@@ -7,4 +7,5 @@
 - [x] SettingsPage.tsx：移除内联检查/安装逻辑，接入 App 弹窗流程（检查中 spinner、新版本可用提示）
 - [x] npm build（tsc）验证
 - [x] dev 启动行为核验（静默不打扰；dev 端口 1420 落入系统保留段，已迁移 14200）
-- [ ] 发布侧：签名密钥配置 + 测试 release 端到端验证（依赖用户配置 TAURI_SIGNING_PRIVATE_KEY）
+- [x] 签名密钥：生成新密钥对（~/.tauri/gprocess-v2.key）、更新 pubkey、签名构建产出 .sig 验证通过
+- [ ] 测试 release 端到端验证（需发布 v0.1.1 测试 release）

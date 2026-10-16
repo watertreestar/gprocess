@@ -34,6 +34,9 @@ M4 已接入 updater 插件（`tauri_plugin_updater` 在 `lib.rs` 初始化，pu
 
 ## 发布注意事项（供后续 release 流程）
 
-1. 生成密钥对：`npx tauri signer generate`（私钥妥善保管，建议存 CI Secret）
-2. 更新 `tauri.conf.json` 中 `plugins.updater.pubkey` 为新的公钥
-3. 构建时设置 `TAURI_SIGNING_PRIVATE_KEY` 环境变量，使 updater 产物（latest.json + 签名）随 release 生成
+1. 生成密钥对：`npx tauri signer generate -w <路径>`（私钥妥善保管，建议存 CI Secret）
+2. 更新 `tauri.conf.json` 中 `plugins.updater.pubkey` 为新的公钥（生成时同步输出的 `.pub` 文件内容）
+3. 构建时设置环境变量（实机验证通过的方式）：
+   - `TAURI_SIGNING_PRIVATE_KEY`：密钥文件**内容**（`$(cat <key>)`，传文件路径不生效）
+   - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`：无密码密钥必须显式设为空字符串，否则签名步骤阻塞等待密码输入
+4. 产物：安装包 + 同名 `.sig`；`latest.json` 需在发布时手工生成（含 version/notes/pub_date/platforms[windows-x86_64].signature/.url，signature 为 .sig 文件内容 base64），与安装包、.sig 一起上传到 GitHub Release 资产
