@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { IslandOverlay } from "@/components/IslandOverlay";
 import { KillDialog } from "@/components/KillDialog";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts, type ToastItem } from "@/components/Toasts";
 import { TopBar } from "@/components/TopBar";
+import { UpdateDialog } from "@/components/UpdateDialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   assessProcess,
@@ -51,6 +53,9 @@ export default function App() {
   const [assessment, setAssessment] = useState<KillAssessment | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [islandQueue, setIslandQueue] = useState<IslandAlert[]>([]);
+  const [updateInfo, setUpdateInfo] = useState<Update | null>(null);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
 
   const { snapshot, refresh, refreshing } = useSnapshot(
     settings.refreshIntervalMs,
@@ -157,6 +162,46 @@ export default function App() {
   const pushToast = useCallback((kind: ToastItem["kind"], message: string) => {
     setToasts((prev) => [...prev, { id: Date.now() + Math.random(), kind, message }]);
   }, []);
+
+  // 更新检查：启动静默（跳过版本抑制、错误吞掉），手动忽略跳过并 toast 反馈
+  const runUpdateCheck = useCallback(
+    async (manual: boolean) => {
+      if (!isTauri) return;
+      if (manual) setUpdateChecking(true);
+      try {
+        const update = await check();
+        if (!update) {
+          if (manual) pushToast("success", "已是最新版本");
+          return;
+        }
+        if (!manual && update.version === settings.skippedVersion) return;
+        setUpdateInfo(update);
+        setUpdateOpen(true);
+      } catch (e) {
+        if (manual) pushToast("error", `检查更新失败：${String(e)}`);
+      } finally {
+        if (manual) setUpdateChecking(false);
+      }
+    },
+    [settings.skippedVersion, pushToast],
+  );
+
+  // 启动自动检查：设置加载完成后延迟 8 秒静默执行一次
+  const startupUpdateChecked = useRef(false);
+  useEffect(() => {
+    if (!settingsLoaded || startupUpdateChecked.current) return;
+    startupUpdateChecked.current = true;
+    const timer = setTimeout(() => void runUpdateCheck(false), 8000);
+    return () => clearTimeout(timer);
+  }, [settingsLoaded, runUpdateCheck]);
+
+  const skipUpdate = useCallback(
+    (version: string) => {
+      patchSettings({ skippedVersion: version });
+      setUpdateOpen(false);
+    },
+    [patchSettings],
+  );
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -311,6 +356,9 @@ export default function App() {
                 isAdmin={isAdmin}
                 onRestartAsAdmin={handleRestartAsAdmin}
                 onToast={pushToast}
+                onCheckUpdate={() => void runUpdateCheck(true)}
+                checking={updateChecking}
+                updateVersion={updateInfo?.version ?? null}
               />
             )}
           </main>
@@ -323,6 +371,12 @@ export default function App() {
           assessment={assessment}
           onOpenChange={(open) => !open && setKillTarget(null)}
           onConfirm={confirmKill}
+        />
+        <UpdateDialog
+          update={updateInfo}
+          open={updateOpen}
+          onOpenChange={setUpdateOpen}
+          onSkip={skipUpdate}
         />
         <Toasts items={toasts} onDismiss={dismissToast} />
       </div>

@@ -23,6 +23,8 @@ export interface Settings {
   orphanExcludes: string[];
   /** 侧栏是否展开 */
   sidebarExpanded: boolean;
+  /** 跳过的更新版本号，启动自动检查时不提示该版本 */
+  skippedVersion: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   longOrphanMin: 240,
   orphanExcludes: [],
   sidebarExpanded: false,
+  skippedVersion: null,
 };
 
 /** 从应用数据目录 settings.json 读取；文件缺失/损坏回退默认值 */

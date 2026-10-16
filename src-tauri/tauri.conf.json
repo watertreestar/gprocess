@@ -5,7 +5,7 @@
   "identifier": "com.gprocess.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:14200",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -29,7 +29,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERCQzlCNjIxNzZFMDZFRjUKUldUMWJ1QjJJYmJKMnhiUUs5WDhGNEZDVHZtUEhJclFCWWQxbnkzTkVkN3M2dDBMQ2N2aUo3WnoK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEU5QjA5NkMwRDU4QTJBRDIKUldUU0tvclZ3SmF3NlJoSkZmSlFaM2R2NzNDNEF0ZmhyU3hqOUhPeXdVbnZPeXZtZjdrZXRycGQK",
       "endpoints": [
         "https://github.com/watertreestar/gprocess/releases/latest/download/latest.json"
       ]

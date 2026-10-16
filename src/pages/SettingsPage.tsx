@@ -8,8 +8,6 @@ import {
   X,
 } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
-import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
 import {
   disable as disableAutostart,
   enable as enableAutostart,
@@ -41,6 +39,9 @@ interface SettingsPageProps {
   isAdmin: boolean;
   onRestartAsAdmin: () => void;
   onToast: (kind: "success" | "error", message: string) => void;
+  onCheckUpdate: () => void;
+  checking: boolean;
+  updateVersion: string | null;
 }
 
 const FILTER_OPTIONS: { value: FilterTab; label: string }[] = [
@@ -106,6 +107,9 @@ export function SettingsPage({
   isAdmin,
   onRestartAsAdmin,
   onToast,
+  onCheckUpdate,
+  checking,
+  updateVersion,
 }: SettingsPageProps) {
   const [portInput, setPortInput] = useState("");
   const [excludeInput, setExcludeInput] = useState("");
@@ -141,11 +145,8 @@ export function SettingsPage({
     }
   };
 
-  // 自动更新（GitHub Releases）
+  // 自动更新（GitHub Releases）：检查与安装由 App 统一弹窗流程编排
   const [version, setVersion] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [installing, setInstalling] = useState(false);
-  const [newVersion, setNewVersion] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isTauri) return;
@@ -153,42 +154,6 @@ export function SettingsPage({
       .then(setVersion)
       .catch(() => {});
   }, []);
-
-  const checkUpdate = async () => {
-    setChecking(true);
-    try {
-      const update = await check();
-      if (update) {
-        setNewVersion(update.version);
-        onToast("success", `发现新版本 v${update.version}`);
-      } else {
-        setNewVersion(null);
-        onToast("success", "已是最新版本");
-      }
-    } catch (e) {
-      onToast("error", `检查更新失败：${String(e)}`);
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const installUpdate = async () => {
-    setInstalling(true);
-    try {
-      const update = await check();
-      if (!update) {
-        setNewVersion(null);
-        onToast("success", "已是最新版本");
-        return;
-      }
-      await update.downloadAndInstall();
-      await relaunch();
-    } catch (e) {
-      onToast("error", `更新失败：${String(e)}`);
-    } finally {
-      setInstalling(false);
-    }
-  };
 
   const addPort = () => {
     const port = Number(portInput.trim());
@@ -443,25 +408,26 @@ export function SettingsPage({
             </span>
           </Row>
           <Row
-            label={newVersion ? `新版本 v${newVersion} 可用` : "自动更新"}
-            hint={newVersion ? "下载安装后自动重启应用" : undefined}
+            label={updateVersion ? `新版本 v${updateVersion} 可用` : "自动更新"}
+            hint={
+              updateVersion
+                ? "点击查看更新说明并下载安装"
+                : "启动时自动检查 GitHub Releases"
+            }
           >
-            {newVersion ? (
-              <Button size="sm" onClick={installUpdate} disabled={installing}>
+            <Button
+              size="sm"
+              variant={updateVersion ? "default" : "secondary"}
+              onClick={onCheckUpdate}
+              disabled={!isTauri || checking}
+            >
+              {updateVersion ? (
                 <Download />
-                {installing ? "安装中…" : "下载并安装"}
-              </Button>
-            ) : (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={checkUpdate}
-                disabled={!isTauri || checking}
-              >
+              ) : (
                 <RefreshCw className={checking ? "animate-spin" : undefined} />
-                {checking ? "检查中…" : "检查更新"}
-              </Button>
-            )}
+              )}
+              {updateVersion ? "查看更新" : checking ? "检查中…" : "检查更新"}
+            </Button>
           </Row>
         </section>
 
