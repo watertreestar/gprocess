@@ -9,4 +9,4 @@
 - [x] 单测：append_sample 追加/计数/多行
 - [x] cargo test / clippy / npm build 验证 + 实机写一条样本核验 JSONL
 - [x] 文档勾选 + plans.md
-- [ ] 提交
+- [x] 提交

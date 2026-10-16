@@ -10,5 +10,5 @@
 - [x] 单测：系统名单降级、脚本提取（包名/作用域包/npm/普通路径/非路径参数）、父脚本记忆
 - [x] cargo test（47 通过）/ clippy / npm build 验证
 - [x] 实机诊断验证：非提权快照中系统进程不再误判；node 进程脚本标记正确提取（npm / vite）
-- [ ] release 构建启动人工验收
-- [ ] 文档勾选 + plans.md + 提交
+- [x] release 构建完成（msi + nsis），待人工验收
+- [x] 文档勾选 + plans.md + 提交
