@@ -26,6 +26,7 @@ pub fn run() {
             kill::kill_tree,
             assess::assess_process,
             handles::find_file_lockers,
+            handles::search_files,
             admin::is_admin,
             admin::restart_as_admin,
             settings::load_settings,

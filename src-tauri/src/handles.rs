@@ -4,7 +4,9 @@
 //! 已知限制：跨用户 / 高权限进程的占用可能查不到（表现为空结果而非报错）。
 
 use serde::Serialize;
-use sysinfo::{ProcessesToUpdate, Pid};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use sysinfo::{Pid, ProcessesToUpdate};
 use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS, WIN32_ERROR};
 use windows::Win32::System::RestartManager::{
@@ -28,6 +30,105 @@ pub struct HandleLocker {
     pub is_service: bool,
     /// 可被 Restart Manager 自动重启
     pub restartable: bool,
+    pub agent: Option<AgentEvidence>,
+    pub identity_verified: bool,
+    pub process_start_time: Option<i64>,
+    #[serde(skip)]
+    rm_start_time: u64,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentEvidence {
+    pub name: String,
+    pub relation: AgentRelation,
+    pub evidence: String,
+}
+
+#[derive(Serialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentRelation {
+    Direct,
+    Parent,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FileCandidate {
+    pub path: String,
+    pub is_directory: bool,
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FileSearchResult {
+    pub candidates: Vec<FileCandidate>,
+    pub truncated: bool,
+}
+
+const MAX_SEARCH_ENTRIES: usize = 20_000;
+const MAX_SEARCH_RESULTS: usize = 80;
+
+fn search_files_in(root: &Path, term: &str, max_entries: usize, max_results: usize) -> FileSearchResult {
+    let term = term.to_lowercase();
+    let browsing = term.is_empty();
+    let mut stack = vec![root.to_path_buf()];
+    let mut candidates = Vec::new();
+    let mut scanned = 0;
+    let mut truncated = false;
+
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        for entry in entries.flatten() {
+            if scanned >= max_entries || candidates.len() >= max_results {
+                truncated = true;
+                break;
+            }
+            scanned += 1;
+            let Ok(file_type) = entry.file_type() else { continue };
+            if file_type.is_symlink() { continue; }
+            let is_directory = file_type.is_dir();
+            if !is_directory && !file_type.is_file() { continue; }
+            let path = entry.path();
+            let filename = entry.file_name().to_string_lossy().to_lowercase();
+            if filename.contains(&term) {
+                candidates.push(FileCandidate {
+                    path: path.to_string_lossy().into_owned(),
+                    is_directory,
+                });
+            }
+            if is_directory && !browsing {
+                stack.push(path);
+            }
+        }
+        if truncated { break; }
+    }
+    FileSearchResult { candidates, truncated }
+}
+
+#[tauri::command]
+pub async fn search_files(term: String, root: Option<String>) -> Result<FileSearchResult, String> {
+    let term = term.trim().to_string();
+    if term.chars().count() < 2 && !(term.is_empty() && root.is_some()) {
+        return Err("至少输入 2 个字符以搜索文件或目录".into());
+    }
+    let home = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .ok_or("无法确定用户目录")?;
+    let home = home.canonicalize().map_err(|e| format!("无法读取用户目录：{e}"))?;
+    let root = match root {
+        Some(root) => {
+            let path = PathBuf::from(root).canonicalize().map_err(|e| format!("无法读取搜索目录：{e}"))?;
+            if !path.starts_with(&home) || !path.is_dir() {
+                return Err("搜索目录必须位于用户目录中".into());
+            }
+            path
+        }
+        None => home,
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        search_files_in(&root, &term, MAX_SEARCH_ENTRIES, MAX_SEARCH_RESULTS)
+    }).await.map_err(|e| format!("搜索文件失败：{e}"))
 }
 
 /// RM 会话守卫：作用域结束自动 RmEndSession
@@ -86,7 +187,13 @@ fn query_lockers(path: &str) -> Result<Vec<HandleLocker>, String> {
     let mut count = 0u32;
     let mut reboot_reasons = 0u32;
     let err = unsafe {
-        RmGetList(session.0, &mut needed, &mut count, None, &mut reboot_reasons)
+        RmGetList(
+            session.0,
+            &mut needed,
+            &mut count,
+            None,
+            &mut reboot_reasons,
+        )
     };
     if err != ERROR_SUCCESS && err != ERROR_MORE_DATA {
         return Err(format!("RmGetList 失败（错误码 {}）", err.0));
@@ -123,9 +230,89 @@ fn query_lockers(path: &str) -> Result<Vec<HandleLocker>, String> {
                 status: String::new(),
                 is_service: !service.is_empty(),
                 restartable: info.bRestartable.as_bool(),
+                agent: None,
+                identity_verified: false,
+                process_start_time: None,
+                rm_start_time: (u64::from(info.Process.ProcessStartTime.dwHighDateTime) << 32)
+                    | u64::from(info.Process.ProcessStartTime.dwLowDateTime),
             }
         })
         .collect())
+}
+
+const WINDOWS_EPOCH_SECONDS: u64 = 11_644_473_600;
+
+fn matches_start_time(rm_start: u64, unix_start: u64) -> bool {
+    if rm_start == 0 || unix_start == 0 {
+        return false;
+    }
+    let rm_seconds = rm_start / 10_000_000;
+    rm_seconds.checked_sub(WINDOWS_EPOCH_SECONDS) == Some(unix_start)
+}
+
+fn known_agent(label: &str) -> Option<&'static str> {
+    let label = label.trim().to_ascii_lowercase();
+    let name = label.rsplit(['/', '\\']).next().unwrap_or(&label);
+    match name {
+        "claude" | "claude.exe" | "claude-code" => Some("Claude Code"),
+        "codex" | "codex.exe" => Some("Codex"),
+        "cursor" | "cursor.exe" => Some("Cursor"),
+        "windsurf" | "windsurf.exe" => Some("Windsurf"),
+        "qoder" | "qoder.exe" => Some("Qoder"),
+        "opencode" | "opencode.exe" => Some("OpenCode"),
+        "aider" | "aider.exe" | "aider.py" => Some("Aider"),
+        "agent-browser" | "agent-browser.exe" => Some("Agent Browser"),
+        _ => None,
+    }
+}
+
+fn identify_agent(
+    proc: &crate::snapshot::ProcessInfo,
+    processes: &[crate::snapshot::ProcessInfo],
+    history: &HashMap<u32, crate::snapshot::ParentRef>,
+) -> Option<AgentEvidence> {
+    let direct = known_agent(&proc.name)
+        .map(|name| (name, format!("进程名：{}", proc.name)))
+        .or_else(|| {
+            proc.script.as_deref().and_then(|script| {
+                known_agent(script).map(|name| (name, format!("脚本：{script}")))
+            })
+        });
+    if let Some((name, evidence)) = direct {
+        return Some(AgentEvidence {
+            name: name.into(),
+            relation: AgentRelation::Direct,
+            evidence,
+        });
+    }
+    let parent = proc.ppid.and_then(|pid| {
+        processes
+            .iter()
+            .find(|p| p.pid == pid && p.start_time <= proc.start_time)
+    });
+    let (parent_name, parent_script) = if let Some(parent) = parent {
+        (Some(parent.name.as_str()), parent.script.as_deref())
+    } else {
+        let remembered = history
+            .get(&proc.pid)
+            .filter(|r| r.child_start == proc.start_time);
+        (
+            remembered.map(|r| r.parent_name.as_str()),
+            remembered.and_then(|r| r.parent_script.as_deref()),
+        )
+    };
+    let (name, evidence) = parent_name
+        .and_then(|label| known_agent(label).map(|name| (name, format!("父进程：{label}"))))
+        .or_else(|| {
+            parent_script.and_then(|script| {
+                known_agent(script).map(|name| (name, format!("父进程脚本：{script}")))
+            })
+        })?;
+    Some(AgentEvidence {
+        name: name.into(),
+        relation: AgentRelation::Parent,
+        evidence,
+    })
 }
 
 /// 用 sysinfo 补充 exe_path / user / status（RM 只给显示名）
@@ -140,17 +327,27 @@ fn enrich(state: &SnapshotState, lockers: &mut [HandleLocker]) {
         true,
         crate::snapshot::process_refresh_kind(),
     );
+    let processes = crate::snapshot::collect_processes(&sys, &state.users);
+    let history = state
+        .parent_history
+        .lock()
+        .expect("parent history lock poisoned");
     for l in lockers.iter_mut() {
-        match sys.process(Pid::from_u32(l.pid)) {
-            Some(p) => {
-                l.exe_path = p.exe().map(|e| e.to_string_lossy().into_owned());
-                l.user = p
-                    .user_id()
-                    .and_then(|uid| state.users.get_user_by_id(uid))
-                    .map(|u| u.name().to_string());
-                l.status = format!("{:?}", p.status());
-            }
-            None => l.status = "已退出".into(),
+        let Some(p) = sys.process(Pid::from_u32(l.pid)) else {
+            l.status = "已退出".into();
+            continue;
+        };
+        l.exe_path = p.exe().map(|e| e.to_string_lossy().into_owned());
+        l.user = p
+            .user_id()
+            .and_then(|uid| state.users.get_user_by_id(uid))
+            .map(|u| u.name().to_string());
+        l.status = format!("{:?}", p.status());
+        l.identity_verified = matches_start_time(l.rm_start_time, p.start_time());
+        if l.identity_verified {
+            l.process_start_time = Some((p.start_time() * 1000) as i64);
+            let proc = processes.iter().find(|proc| proc.pid == l.pid);
+            l.agent = proc.and_then(|proc| identify_agent(proc, &processes, &history));
         }
     }
 }
@@ -164,6 +361,11 @@ pub fn find_file_lockers(
     if path.is_empty() {
         return Err("请输入文件路径".into());
     }
+    let metadata =
+        std::fs::metadata(Path::new(&path)).map_err(|e| format!("无法读取文件路径：{e}"))?;
+    if !metadata.is_file() {
+        return Err("请选择具体文件，暂不支持目录查询".into());
+    }
     let mut lockers = query_lockers(&path)?;
     enrich(&state, &mut lockers);
     Ok(lockers)
@@ -176,12 +378,18 @@ mod tests {
     #[test]
     fn finds_self_holding_open_file() {
         // 本进程持有临时文件句柄 → RM 必须查出来（确定性测试）
-        let path = std::env::temp_dir().join(format!("gprocess_rm_test_{}.tmp", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("gprocess_rm_test_{}.tmp", std::process::id()));
         let file = std::fs::File::create(&path).unwrap();
-        let lockers = query_lockers(&path.to_string_lossy()).unwrap();
+        let mut lockers = query_lockers(&path.to_string_lossy()).unwrap();
         assert!(
             lockers.iter().any(|l| l.pid == std::process::id()),
             "应查出本进程持有句柄，实际：{lockers:?}"
+        );
+        enrich(&SnapshotState::new(), &mut lockers);
+        assert!(
+            lockers.iter().any(|l| l.pid == std::process::id() && l.identity_verified),
+            "自持句柄应核实进程身份，实际：{lockers:?}"
         );
         drop(file);
         let _ = std::fs::remove_file(&path);
@@ -190,11 +398,140 @@ mod tests {
     #[test]
     fn empty_when_nobody_holds_file() {
         // 创建后立即关闭：无人持有 → 空结果
-        let path = std::env::temp_dir().join(format!("gprocess_rm_idle_{}.tmp", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("gprocess_rm_idle_{}.tmp", std::process::id()));
         std::fs::File::create(&path).unwrap();
         let lockers = query_lockers(&path.to_string_lossy()).unwrap();
         assert!(lockers.is_empty(), "无人持有应为空，实际：{lockers:?}");
         let _ = std::fs::remove_file(&path);
+    }
+
+    fn process(
+        pid: u32,
+        ppid: Option<u32>,
+        name: &str,
+        script: Option<&str>,
+    ) -> crate::snapshot::ProcessInfo {
+        use crate::snapshot::{OrphanInfo, OrphanStatus};
+        crate::snapshot::ProcessInfo {
+            pid,
+            ppid,
+            name: name.into(),
+            exe_path: None,
+            cmdline: vec![],
+            script: script.map(str::to_string),
+            start_time: 1000,
+            cpu_percent: 0.0,
+            memory_bytes: 0,
+            user: None,
+            status: "Running".into(),
+            orphan: OrphanInfo {
+                status: OrphanStatus::None,
+                pid_reused: false,
+                heuristic_score: 0,
+                parent_name: None,
+                parent_script: None,
+                origin: None,
+                external_connections: 0,
+            },
+        }
+    }
+
+    #[test]
+    fn identifies_direct_agent_and_runtime_script_without_guessing_generic_runtime() {
+        let history = HashMap::new();
+        let codex = process(1, None, "codex.exe", None);
+        let runtime = process(2, None, "node.exe", Some("agent-browser"));
+        let generic = process(3, None, "node.exe", Some("vite"));
+        let processes = [codex.clone(), runtime.clone(), generic.clone()];
+        assert_eq!(
+            identify_agent(&codex, &processes, &history)
+                .unwrap()
+                .relation,
+            AgentRelation::Direct
+        );
+        assert_eq!(
+            identify_agent(&runtime, &processes, &history).unwrap().name,
+            "Agent Browser"
+        );
+        assert!(identify_agent(&generic, &processes, &history).is_none());
+        assert!(
+            identify_agent(&process(4, None, "python.exe", None), &processes, &history).is_none()
+        );
+        assert!(known_agent("not-codex.exe").is_none());
+    }
+
+    #[test]
+    fn identifies_parent_agent_without_claiming_direct_ownership() {
+        let parent = process(1, None, "claude.exe", None);
+        let child = process(2, Some(1), "node.exe", Some("vite"));
+        let processes = [parent, child.clone()];
+        let evidence = identify_agent(&child, &processes, &HashMap::new()).unwrap();
+        assert_eq!(evidence.relation, AgentRelation::Parent);
+        assert_eq!(evidence.name, "Claude Code");
+        assert!(evidence.evidence.starts_with("父进程"));
+    }
+
+    #[test]
+    fn uses_remembered_parent_only_for_same_child_start() {
+        let child = process(2, Some(1), "node.exe", None);
+        let mut history = HashMap::new();
+        history.insert(
+            2,
+            crate::snapshot::ParentRef {
+                child_start: 1000,
+                parent_name: "node.exe".into(),
+                parent_script: Some("codex".into()),
+            },
+        );
+        assert_eq!(
+            identify_agent(&child, std::slice::from_ref(&child), &history)
+                .unwrap()
+                .relation,
+            AgentRelation::Parent
+        );
+        history.get_mut(&2).unwrap().child_start = 2000;
+        assert!(identify_agent(&child, std::slice::from_ref(&child), &history).is_none());
+        let reused_parent = process(1, None, "cursor.exe", None);
+        let mut reused_parent = reused_parent;
+        reused_parent.start_time = 2000;
+        assert!(identify_agent(&child, &[reused_parent, child.clone()], &history).is_none());
+    }
+
+    #[test]
+    fn verifies_rm_start_time_against_sysinfo_seconds() {
+        let unix = 1_700_000_000;
+        let rm = (unix + WINDOWS_EPOCH_SECONDS) * 10_000_000 + 4_000_000;
+        assert!(matches_start_time(rm, unix));
+        assert!(!matches_start_time(rm, unix + 1));
+        assert!(!matches_start_time(0, unix));
+    }
+
+    #[test]
+    fn finds_named_files_and_directories_without_following_symlinks() {
+        let root = std::env::temp_dir().join(format!("gprocess_search_{}", std::process::id()));
+        std::fs::create_dir_all(root.join("AgentProject")).unwrap();
+        std::fs::write(root.join("AgentProject").join("agent.log"), "").unwrap();
+        std::fs::write(root.join("other.txt"), "").unwrap();
+        let results = search_files_in(&root, "AGENT", 100, 100);
+        assert!(!results.truncated);
+        assert_eq!(results.candidates.len(), 2);
+        assert!(results.candidates.iter().any(|c| c.is_directory));
+        assert!(results.candidates.iter().any(|c| !c.is_directory));
+        let limited = search_files_in(&root, "agent", 1, 100);
+        assert!(limited.truncated);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn browsing_directory_only_lists_immediate_children() {
+        let root = std::env::temp_dir().join(format!("gprocess_browse_{}", std::process::id()));
+        std::fs::create_dir_all(root.join("nested")).unwrap();
+        std::fs::write(root.join("nested").join("file.txt"), "").unwrap();
+        let results = search_files_in(&root, "", 100, 100);
+        assert_eq!(results.candidates.len(), 1);
+        assert!(results.candidates[0].is_directory);
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -207,6 +544,10 @@ mod tests {
             status: "Running".into(),
             is_service: false,
             restartable: true,
+            agent: None,
+            identity_verified: false,
+            process_start_time: None,
+            rm_start_time: 0,
         };
         let json = serde_json::to_string(&locker).unwrap();
         assert!(json.contains("\"appName\":\"app\""));

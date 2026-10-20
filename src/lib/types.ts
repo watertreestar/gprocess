@@ -80,6 +80,11 @@ export type KillMode = "single" | "tree";
 export type FeedbackLabel = "not_orphan" | "origin_wrong" | "is_orphan";
 
 /** 文件句柄占用者（Restart Manager 查询结果） */
+export interface FileSearchResult {
+  candidates: { path: string; isDirectory: boolean }[];
+  truncated: boolean;
+}
+
 export interface HandleLocker {
   pid: number;
   appName: string;
@@ -89,6 +94,9 @@ export interface HandleLocker {
   status: string;
   isService: boolean;
   restartable: boolean;
+  identityVerified: boolean;
+  processStartTime: number | null;
+  agent: { name: string; relation: "direct" | "parent"; evidence: string } | null;
 }
 
 /** 灵动岛告警负载（主窗口内通知队列） */
